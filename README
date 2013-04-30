@@ -1,0 +1,21 @@
+The mce-libhybris-plugin implements a mce plugin that allows mce to
+use Android libhardware via libhybris to control for example display
+brightness and enable/disable input from proximity and light sensors.
+
+The idea of "hybris-plugin" (this package) is shortly:
+- it uses no mce functions or data types
+- it can be compiled independently from mce
+- it exposes no libhybris/android datatypes/functions
+
+And the idea of "hybris-module" (part of mce) is:
+- it contains functions with the same names as "hybris-plugin"
+- if called, the functions will load & call "hybris-plugin" code
+- if "hybris-plugin" is not present "hybris-module" functions still
+  work, but return failures for everything
+
+Put together:
+- mce code can assume that libhybris code is always available and
+  callable during hw probing activity
+- if hybris plugin is not installed (or if some hw is not supported by
+  the underlying android code), failures will be reported and mce can
+  try other existing ways to proble hw controls
