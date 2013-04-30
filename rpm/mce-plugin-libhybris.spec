@@ -7,7 +7,7 @@ License:    LGPLv2.1
 URL:        https://github.com/nemomobile/mce-plugin-libhybris
 Source0:    %{name}-%{version}.tar.bz2
 
-Requires:         mce >= 1.12.9
+Requires:         mce >= 1.12.10
 Requires:         systemd
 Requires(pre):    systemd
 Requires(post):   systemd
