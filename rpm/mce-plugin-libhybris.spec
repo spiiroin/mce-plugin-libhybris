@@ -16,6 +16,7 @@ Requires(postun): systemd
 
 BuildRequires:  pkgconfig(glib-2.0) >= 2.18.0
 BuildRequires:  pkgconfig(libhardware)
+BuildRequires:  pkgconfig(android-headers)
 BuildRequires:  systemd
 
 %description
