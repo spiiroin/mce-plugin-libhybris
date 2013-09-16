@@ -15,8 +15,7 @@ Requires(preun):  systemd
 Requires(postun): systemd
 
 BuildRequires:  pkgconfig(glib-2.0) >= 2.18.0
-BuildRequires:  libhybris-devel
-BuildRequires:  libhybris-libhardware-devel
+BuildRequires:  pkgconfig(libhardware)
 BuildRequires:  systemd
 
 %description
