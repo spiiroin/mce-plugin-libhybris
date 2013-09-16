@@ -61,7 +61,7 @@ LDLIBS   += -Wl,--as-needed
 # Flags from pkg-config
 # ----------------------------------------------------------------------------
 
-#PKG_NAMES += glib-2.0
+PKG_NAMES += android-headers
 
 maintenance  = normalize clean distclean mostlyclean
 intersection = $(strip $(foreach w,$1, $(filter $w,$2)))
