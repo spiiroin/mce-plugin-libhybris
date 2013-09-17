@@ -248,6 +248,26 @@ static void mce_hybris_modfb_unload(void)
  * framebuffer device
  * ------------------------------------------------------------------------- */
 
+/** Convenience function for opening frame buffer device
+ *
+ * Similar to what we might or might not have available from hardware/fb.h
+ */
+static int
+mce_framebuffer_open(const struct hw_module_t* module,
+		     struct framebuffer_device_t** device) {
+  return module->methods->open(module, GRALLOC_HARDWARE_FB0,
+			       (struct hw_device_t**)device);
+}
+
+/** Convenience function for closing frame buffer device
+ *
+ * Similar to what we might or might not have available from hardware/fb.h
+ */
+static int
+mce_framebuffer_close(struct framebuffer_device_t* device) {
+    return device->common.close(&device->common);
+}
+
 /** Initialize libhybris frame buffer device object
  *
  * @return true on success, false on failure
@@ -263,7 +283,7 @@ bool mce_hybris_framebuffer_init(void)
       goto cleanup;
     }
 
-    framebuffer_open(mod_fb, &dev_fb);
+    mce_framebuffer_open(mod_fb, &dev_fb);
     if( !dev_fb ) {
       mce_log(LOG_ERR, "failed to open framebuffer device");
     }
@@ -281,7 +301,7 @@ cleanup:
 void mce_hybris_framebuffer_quit(void)
 {
   if( dev_fb ) {
-    framebuffer_close(dev_fb), dev_fb = 0;
+    mce_framebuffer_close(dev_fb), dev_fb = 0;
   }
 }
 
@@ -364,6 +384,27 @@ static void mce_hybris_modlights_unload(void)
  * display backlight device
  * ------------------------------------------------------------------------- */
 
+/** Convenience function for opening a light device
+ *
+ * Similar to what we might or might not have available from hardware/lights.h
+ */
+static int
+mce_light_device_open(const struct hw_module_t* module, const char *id,
+		  struct light_device_t** device)
+{
+    return module->methods->open(module, id, (struct hw_device_t**)device);
+}
+
+/** Convenience function for closing a light device
+ *
+ * Similar to what we might or might not have available from hardware/lights.h
+ */
+static void
+mce_light_device_close(const struct light_device_t *device)
+{
+    device->common.close((struct hw_device_t*) device);
+}
+
 /** Initialize libhybris display backlight device object
  *
  * @return true on success, false on failure
@@ -379,7 +420,7 @@ bool mce_hybris_backlight_init(void)
       goto cleanup;
     }
 
-    light_device_open(mod_lights, LIGHT_ID_BACKLIGHT, &dev_backlight);
+    mce_light_device_open(mod_lights, LIGHT_ID_BACKLIGHT, &dev_backlight);
 
     if( !dev_backlight ) {
       mce_log(LOG_WARNING, "failed to open backlight device");
@@ -398,7 +439,7 @@ cleanup:
 void mce_hybris_backlight_quit(void)
 {
   if( dev_backlight ) {
-    light_device_close(dev_backlight), dev_backlight = 0;
+    mce_light_device_close(dev_backlight), dev_backlight = 0;
   }
 }
 
@@ -458,7 +499,7 @@ bool mce_hybris_keypad_init(void)
       goto cleanup;
     }
 
-    light_device_open(mod_lights, LIGHT_ID_KEYBOARD, &dev_keypad);
+    mce_light_device_open(mod_lights, LIGHT_ID_KEYBOARD, &dev_keypad);
 
     if( !dev_keypad ) {
       mce_log(LOG_WARNING, "failed to open keypad backlight device");
@@ -477,7 +518,7 @@ cleanup:
 void mce_hybris_keypad_quit(void)
 {
   if( dev_keypad ) {
-    light_device_close(dev_keypad), dev_keypad = 0;
+    mce_light_device_close(dev_keypad), dev_keypad = 0;
   }
 }
 
@@ -537,7 +578,7 @@ bool mce_hybris_indicator_init(void)
       goto cleanup;
     }
 
-    light_device_open(mod_lights, LIGHT_ID_NOTIFICATIONS, &dev_indicator);
+    mce_light_device_open(mod_lights, LIGHT_ID_NOTIFICATIONS, &dev_indicator);
 
     if( !dev_indicator ) {
       mce_log(LOG_WARNING, "failed to open indicator led device");
@@ -556,7 +597,7 @@ cleanup:
 void mce_hybris_indicator_quit(void)
 {
   if( dev_indicator ) {
-    light_device_close(dev_indicator), dev_indicator = 0;
+    mce_light_device_close(dev_indicator), dev_indicator = 0;
   }
 }
 
@@ -613,6 +654,28 @@ cleanup:
 /* ========================================================================= *
  * SENSORS module
  * ========================================================================= */
+
+/** Convenience function for opening sensors device
+ *
+ * Similar to what we might or might not have available from hardware/sensors.h
+ */
+static int
+mce_sensors_open(const struct hw_module_t* module,
+	     struct sensors_poll_device_t** device)
+{
+  return module->methods->open(module, SENSORS_HARDWARE_POLL,
+			       (struct hw_device_t**)device);
+}
+
+/** Convenience function for closing sensors device
+ *
+ * Similar to what we might or might not have available from hardware/sensors.h
+ */
+static int
+mce_sensors_close(struct sensors_poll_device_t* device)
+{
+  return device->common.close(&device->common);
+}
 
 /** Handle for libhybris sensors plugin */
 static struct sensors_module_t       *mod_sensors = 0;
@@ -792,7 +855,7 @@ static bool mce_hybris_sensors_init(void)
       goto cleanup;
     }
 
-    sensors_open(&mod_sensors->common, &dev_poll);
+    mce_sensors_open(&mod_sensors->common, &dev_poll);
 
     if( !dev_poll ) {
       mce_log(LOG_WARNING, "failed to open sensor poll device");
@@ -847,7 +910,7 @@ static void mce_hybris_sensors_quit(void)
       dev_poll->activate(dev_poll, als_sensor->handle, false);
     }
 
-    sensors_close(dev_poll), dev_poll = 0;
+    mce_sensors_close(dev_poll), dev_poll = 0;
   }
 }
 
