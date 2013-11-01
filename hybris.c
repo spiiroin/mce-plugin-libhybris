@@ -36,6 +36,8 @@
 #include <stdarg.h>
 #include <syslog.h>
 #include <pthread.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 #include <android/system/window.h>
 #include <android/hardware/lights.h>
@@ -563,6 +565,127 @@ cleanup:
  * indicator led device
  * ------------------------------------------------------------------------- */
 
+/** Write number to existing file */
+static void write_number(const char *path, int number)
+{
+  int fd = open(path, O_WRONLY|O_TRUNC);
+  if( fd == - 1) {
+    mce_log(LOG_ERR, "%s: %s: %m", path, "open");
+    goto cleanup;
+  }
+  if( dprintf(fd, "%d\n", number) < 0 ) {
+    mce_log(LOG_ERR, "%s: %s: %m", path, "write");
+    goto cleanup;
+  }
+cleanup:
+  if( fd != -1 ) close(fd);
+}
+
+/** Read number from file */
+static int read_number(const char *path)
+{
+  int res = -1;
+  int fd  = -1;
+  char tmp[64];
+
+  if( (fd = open(path, O_RDONLY)) == -1 ) {
+    goto cleanup;
+  }
+  int rc = read(fd, tmp, sizeof tmp - 1);
+  if( rc < 0 ) {
+    goto cleanup;
+  }
+  tmp[rc] = 0;
+  res = strtol(tmp, 0, 0);
+
+cleanup:
+  if( fd != -1 ) close(fd);
+
+  return res;
+}
+
+/** Sysfs control paths for a led */
+typedef struct
+{
+  const char *on;  // W
+  const char *off; // W
+  const char *val; // W
+  const char *max; // R
+} led_paths_t;
+
+#define LED_PFIX "/sys/class/leds/led:rgb_"
+
+/** Sysfs control paths for RGB leds */
+static const led_paths_t led_paths[3] =
+{
+  {
+    .on  = LED_PFIX"red/blink_delay_on",
+    .off = LED_PFIX"red/blink_delay_off",
+    .val = LED_PFIX"red/brightness",
+    .max = LED_PFIX"red/max_brightness",
+  },
+  {
+    .on  = LED_PFIX"green/blink_delay_on",
+    .off = LED_PFIX"green/blink_delay_off",
+    .val = LED_PFIX"green/brightness",
+    .max = LED_PFIX"green/max_brightness",
+  },
+  {
+    .on  = LED_PFIX"blue/blink_delay_on",
+    .off = LED_PFIX"blue/blink_delay_off",
+    .val = LED_PFIX"blue/brightness",
+    .max = LED_PFIX"blue/max_brightness",
+  }
+};
+
+/** Cached RGB led maximum brightness values */
+static int  led_max[3];
+
+/** Flag for: controls for RGB leds exist in sysfs */
+static bool led_sysfs = false;
+
+/** Check if controls for RGB leds exist in sysfs */
+static bool led_probe(void)
+{
+  bool res = false;
+
+  for( int c = 0; c < 3; ++c )
+  {
+    if( access(led_paths[c].on,   W_OK) ) goto cleanup;
+    if( access(led_paths[c].off,  W_OK) ) goto cleanup;
+    if( access(led_paths[c].val,  W_OK) ) goto cleanup;
+
+    if( (led_max[c] = read_number(led_paths[c].max)) < 0 )
+    {
+      goto cleanup;
+    }
+  }
+  res = true;
+
+cleanup:
+  return res;
+}
+
+/** Change color and blinking attributes of a LED */
+static void led_control(int chn, int val, int on, int off)
+{
+  int m = led_max[chn];
+
+  val = val * m / 255;
+  if( val > m ) val = m;
+  if( val < 0 ) val = 0;
+
+  if( val != 0 ) {
+    write_number(led_paths[chn].on,  0);
+    write_number(led_paths[chn].off, 0);
+    write_number(led_paths[chn].val, 0);
+  }
+
+  write_number(led_paths[chn].on,  on);
+  write_number(led_paths[chn].off, off);
+  write_number(led_paths[chn].val, val);
+}
+
 /** Initialize libhybris indicator led device object
  *
  * @return true on success, false on failure
@@ -573,6 +696,10 @@ bool mce_hybris_indicator_init(void)
 
   if( !done ) {
     done = true;
+
+    if( (led_sysfs = led_probe()) ) {
+      return true;
+    }
 
     if( !mce_hybris_modlights_load() ) {
       goto cleanup;
@@ -614,6 +741,18 @@ void mce_hybris_indicator_quit(void)
 bool mce_hybris_indicator_set_pattern(int r, int g, int b, int ms_on, int ms_off)
 {
   bool     ack = false;
+
+  if( led_sysfs ) {
+    if( ms_on <= 0 || ms_off <= 0 ) {
+      ms_off = ms_on = 0;
+    }
+
+    led_control(0, r, ms_on, ms_off);
+    led_control(1, g, ms_on, ms_off);
+    led_control(2, b, ms_on, ms_off);
+    ack = true;
+    goto cleanup;
+  }
 
   struct light_state_t lst;
 
