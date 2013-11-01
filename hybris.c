@@ -675,6 +675,12 @@ static void led_control(int chn, int val, int on, int off)
   if( val > m ) val = m;
   if( val < 0 ) val = 0;
 
+  if( val != 0 ) {
+    write_number(led_paths[chn].on,  0);
+    write_number(led_paths[chn].off, 0);
+    write_number(led_paths[chn].val, 0);
+  }
+
   write_number(led_paths[chn].on,  on);
   write_number(led_paths[chn].off, off);
   write_number(led_paths[chn].val, val);
