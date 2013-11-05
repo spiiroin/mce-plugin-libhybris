@@ -565,22 +565,6 @@ cleanup:
  * indicator led device
  * ------------------------------------------------------------------------- */
 
-/** Write number to existing file */
-static void write_number(const char *path, int number)
-{
-  int fd = open(path, O_WRONLY|O_TRUNC);
-  if( fd == - 1) {
-    mce_log(LOG_ERR, "%s: %s: %m", path, "open");
-    goto cleanup;
-  }
-  if( dprintf(fd, "%d\n", number) < 0 ) {
-    mce_log(LOG_ERR, "%s: %s: %m", path, "write");
-    goto cleanup;
-  }
-cleanup:
-  if( fd != -1 ) close(fd);
-}
-
 /** Read number from file */
 static int read_number(const char *path)
 {
@@ -613,6 +597,92 @@ typedef struct
   const char *max; // R
 } led_paths_t;
 
+/** Sysfs state for a led */
+typedef struct
+{
+  int fd_on;
+  int fd_off;
+  int fd_val;
+  int maxval;
+} led_state_t;
+
+/** Set LED brightness
+ *
+ * @param self led state
+ * @param val  brightness in 0 ... 255 range
+ */
+static void led_state_set_value(const led_state_t *self, int val)
+{
+  // transform and clamp from [0 ... 255] to [0 ... maxval]
+  val = val * self->maxval / 255;
+  if( val > self->maxval ) val = self->maxval;
+  if( val < 0 ) val = 0;
+
+  dprintf(self->fd_val, "%d", val);
+}
+
+/** Set LED blinking period
+ *
+ * If both on and off are greater than zero, then the PWM generator
+ * is used to full intensity blinking. Otherwise it is used for
+ * adjusting the LED brightness.
+ *
+ * @param self led state
+ * @param on   milliseconds on
+ * @param off  milliseconds off
+ */
+static void led_state_set_blink(const led_state_t *self, int on, int off)
+{
+  dprintf(self->fd_on,  "%d", on);
+  dprintf(self->fd_off, "%d", off);
+}
+
+/** Clean up led state
+ *
+ * @param self led state
+ */
+static void led_state_quit(led_state_t *self)
+{
+  if( self->fd_on  != -1 ) close(self->fd_on),  self->fd_on  = -1;
+  if( self->fd_off != -1 ) close(self->fd_off), self->fd_off = -1;
+  if( self->fd_val != -1 ) close(self->fd_val), self->fd_val = -1;
+  self->maxval = 255;
+}
+
+/** Initialize led state
+ *
+ * @param self led state
+ * @param conf led config
+ *
+ * @return true if required control files were available, false otherwise
+ */
+static bool led_state_init(led_state_t *self, const led_paths_t *conf)
+{
+  bool success = false;
+
+  if( (self->maxval = read_number(conf->max)) <= 0 )
+  {
+    goto cleanup;
+  }
+  if( (self->fd_on = open(conf->on, O_WRONLY|O_APPEND)) == -1 )
+  {
+    goto cleanup;
+  }
+  if( (self->fd_off = open(conf->off, O_WRONLY|O_APPEND)) == -1 )
+  {
+    goto cleanup;
+  }
+  if( (self->fd_val = open(conf->val, O_WRONLY|O_APPEND)) == -1 )
+  {
+    goto cleanup;
+  }
+
+  success = true;
+
+cleanup:
+  return success;
+}
+
 #define LED_PFIX "/sys/class/leds/led:rgb_"
 
 /** Sysfs control paths for RGB leds */
@@ -638,52 +708,79 @@ static const led_paths_t led_paths[3] =
   }
 };
 
-/** Cached RGB led maximum brightness values */
-static int  led_max[3];
+/** Sysfs state data for RGB leds */
+static led_state_t led_states[3] =
+{
+  {
+    .fd_on  = -1,
+    .fd_off = -1,
+    .fd_val = -1,
+    .maxval = 255,
+  },
+  {
+    .fd_on  = -1,
+    .fd_off = -1,
+    .fd_val = -1,
+    .maxval = 255,
+  },
+  {
+    .fd_on  = -1,
+    .fd_off = -1,
+    .fd_val = -1,
+    .maxval = 255,
+  }
+};
 
 /** Flag for: controls for RGB leds exist in sysfs */
 static bool led_sysfs = false;
 
-/** Check if controls for RGB leds exist in sysfs */
+/** Close all LED sysfs files */
+static void led_flush(void)
+{
+  for( int i = 0; i < 3; ++i )
+  {
+    led_state_quit(led_states + i);
+  }
+}
+
+/** Open sysfs control files for RGB leds
+ *
+ * @return true if required control files were available, false otherwise
+ */
 static bool led_probe(void)
 {
   bool res = false;
 
-  for( int c = 0; c < 3; ++c )
+  for( int i = 0; i < 3; ++i )
   {
-    if( access(led_paths[c].on,   W_OK) ) goto cleanup;
-    if( access(led_paths[c].off,  W_OK) ) goto cleanup;
-    if( access(led_paths[c].val,  W_OK) ) goto cleanup;
-
-    if( (led_max[c] = read_number(led_paths[c].max)) < 0 )
+    if( !led_state_init(led_states + i, led_paths + i) )
     {
       goto cleanup;
     }
   }
+
   res = true;
 
 cleanup:
+
+  if( !res )
+  {
+    led_flush();
+  }
+
   return res;
 }
 
 /** Change color and blinking attributes of a LED */
-static void led_control(int chn, int val, int on, int off)
+static void led_control_blink(int chn, int on, int off)
 {
-  int m = led_max[chn];
+  led_state_set_blink(led_states + chn, on, off);
+}
 
-  val = val * m / 255;
-  if( val > m ) val = m;
-  if( val < 0 ) val = 0;
-
-  if( val != 0 ) {
-    write_number(led_paths[chn].on,  0);
-    write_number(led_paths[chn].off, 0);
-    write_number(led_paths[chn].val, 0);
-  }
-
-  write_number(led_paths[chn].on,  on);
-  write_number(led_paths[chn].off, off);
-  write_number(led_paths[chn].val, val);
+/** Change color and blinking attributes of a LED */
+static void led_control_value(int chn, int val)
+{
+  led_state_set_value(led_states + chn, val);
 }
 
 /** Initialize libhybris indicator led device object
@@ -726,6 +823,7 @@ void mce_hybris_indicator_quit(void)
   if( dev_indicator ) {
     mce_light_device_close(dev_indicator), dev_indicator = 0;
   }
+  led_flush();
 }
 
 /** Set indicator led pattern via libhybris
@@ -747,9 +845,26 @@ bool mce_hybris_indicator_set_pattern(int r, int g, int b, int ms_on, int ms_off
       ms_off = ms_on = 0;
     }
 
-    led_control(0, r, ms_on, ms_off);
-    led_control(1, g, ms_on, ms_off);
-    led_control(2, b, ms_on, ms_off);
+    // zero brightness
+    led_control_value(0, 0);
+    led_control_value(1, 0);
+    led_control_value(2, 0);
+
+    // blink off
+    led_control_blink(0, 0, 0);
+    led_control_blink(1, 0, 0);
+    led_control_blink(2, 0, 0);
+
+    // blink setting
+    if( r ) led_control_blink(0, ms_on, ms_off);
+    if( g ) led_control_blink(1, ms_on, ms_off);
+    if( b ) led_control_blink(2, ms_on, ms_off);
+
+    // specify color
+    led_control_value(0, r);
+    led_control_value(1, g);
+    led_control_value(2, b);
+
     ack = true;
     goto cleanup;
   }
