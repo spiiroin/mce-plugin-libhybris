@@ -38,6 +38,9 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <errno.h>
+
+#include <glib.h>
 
 #include <android/system/window.h>
 #include <android/hardware/lights.h>
@@ -783,6 +786,222 @@ static void led_control_value(int chn, int val)
   led_state_set_value(led_states + chn, val);
 }
 
+/** Questimate of the duration of the kernel delayed work */
+#define LED_QUEUE_DELAY 10 // [ms]
+
+/** State data for led reprogramming "queue" */
+typedef struct
+{
+  int r,g,b;
+  int on,off;
+
+  guint id;
+  bool  need_reset;
+  bool  need_set;
+
+} led_queue_t;
+
+/** Set led to queued ON state if needed
+ *
+ * @param self led queue object
+ *
+ * @return true if led was programmed, false otherwise
+ */
+static bool led_queue_set(led_queue_t *self)
+{
+  bool done;
+
+  if( (done = self->need_set) )
+  {
+    self->need_set = false;
+
+    if( self->r || self->g || self->b )
+    {
+      mce_log(LOG_DEBUG, "LED ON: %02x %02x %02x - %d %d",
+	      self->r, self->g, self->b,
+	      self->on, self->off);
+
+      // blink setting
+      if( self->r ) led_control_blink(0, self->on, self->off);
+      if( self->g ) led_control_blink(1, self->on, self->off);
+      if( self->b ) led_control_blink(2, self->on, self->off);
+
+      // specify color
+      if( self->r ) led_control_value(0, self->r);
+      if( self->g ) led_control_value(1, self->g);
+      if( self->b ) led_control_value(2, self->b);
+    }
+    else
+    {
+      // allow "set to off" cycles to end faster
+      done = false;
+    }
+  }
+
+  return done;
+}
+
+/** Set led to OFF state if needed
+ *
+ * @param self led queue object
+ *
+ * @return true if led was programmed, false otherwise
+ */
+static bool led_queue_reset(led_queue_t *self)
+{
+  bool done;
+
+  if( (done = self->need_reset) )
+  {
+    self->need_reset = false;
+
+    mce_log(LOG_DEBUG, "LED OFF");
+
+    // blink off
+    led_control_blink(0, 0, 0);
+    led_control_blink(1, 0, 0);
+    led_control_blink(2, 0, 0);
+
+    // zero brightness
+    led_control_value(0, 0);
+    led_control_value(1, 0);
+    led_control_value(2, 0);
+  }
+
+  return done;
+}
+
+/** Timer callback for processing led queue
+ *
+ * @param aptr led queue object as void pointer
+ *
+ * @return TRUE to keep the timer alive, FALSE to stop it
+ */
+static gboolean led_queue_cb(gpointer aptr)
+{
+  led_queue_t *self = aptr;
+
+  if( led_queue_reset(self) )
+  {
+    return TRUE;
+  }
+
+  if( led_queue_set(self) )
+  {
+    return TRUE;
+  }
+
+  self->need_reset = true;
+
+  mce_log(LOG_DEBUG, "cycle ended");
+
+  return self->id = 0, FALSE;
+}
+
+/** Queue next led ON state
+ *
+ * Uses timer based state machine to make sure that writes to
+ * led brightness sysfs files are at least LED_QUEUE_DELAY ms
+ * apart from each other.
+ *
+ * @param self   led queue object
+ * @param r      red value 0 ... 255
+ * @param g      green value 0 ... 255
+ * @param b      blue value 0 ... 255
+ * @param ms_on  on period, or 0 for no blinking
+ * @param ms_off off period, or 0 for no blinking
+ */
+static void
+led_queue_schedule(led_queue_t *self,
+		   int r, int g, int b,
+		   int ms_on, int ms_off)
+{
+  self->r   = r;
+  self->g   = g;
+  self->b   = b;
+  self->on  = ms_on;
+  self->off = ms_off;
+
+  if( self->id )
+  {
+    /* The queue timer is working on a reset+set cycle */
+    if( self->need_set )
+    {
+      /* We just changed the current cycle before it
+       * reached re-program the led stage -> nothing to do */
+      mce_log(LOG_DEBUG, "cycle hijacked");
+    }
+    else
+    {
+      /* The current cycle is finished -> restart it */
+      self->need_reset = true;
+      self->need_set = true;
+    }
+  }
+  else
+  {
+    /* The queue timer is no longer active, so we can reset
+     * without delay if needed */
+    led_queue_reset(self);
+
+    /* The set goes always via timer cycle - just to keep
+     * things relatively simple */
+    self->need_set = true;
+    self->id = g_timeout_add(LED_QUEUE_DELAY, led_queue_cb, self);
+    mce_log(LOG_DEBUG, "cycle started");
+  }
+}
+
+/** Nanosleep helper
+ */
+static void led_queue_delay(void)
+{
+  struct timespec ts = { 0, LED_QUEUE_DELAY * 1000000l };
+  TEMP_FAILURE_RETRY(nanosleep(&ts, &ts));
+}
+
+/** Cleanup led programming queue
+ *
+ * @param self  led queue object
+ */
+static void led_queue_quit(led_queue_t *self)
+{
+  // stop timer
+  if( self->id )
+  {
+    g_source_remove(self->id), self->id = 0;
+    self->need_reset = true;
+  }
+
+  // delay, then leds off
+  if( self->need_reset ) {
+    led_queue_delay();
+    led_queue_reset(self);
+  }
+}
+
+/** Initialize led programming queue
+ *
+ * @param self  led queue object
+ */
+static void led_queue_init(led_queue_t *self)
+{
+  self->r   = 0; // leds off
+  self->g   = 0;
+  self->b   = 0;
+
+  self->on  = 0; // no blinking
+  self->off = 0;
+
+  self->id  = 0; // timer not active
+
+  self->need_reset = true;
+  self->need_set   = false;
+}
+
+/** Led programming queue state */
+static led_queue_t led_queue;
+
 /** Initialize libhybris indicator led device object
  *
  * @return true on success, false on failure
@@ -795,6 +1014,7 @@ bool mce_hybris_indicator_init(void)
     done = true;
 
     if( (led_sysfs = led_probe()) ) {
+      led_queue_init(&led_queue);
       return true;
     }
 
@@ -823,7 +1043,11 @@ void mce_hybris_indicator_quit(void)
   if( dev_indicator ) {
     mce_light_device_close(dev_indicator), dev_indicator = 0;
   }
-  led_flush();
+
+  if( led_sysfs ) {
+    led_queue_quit(&led_queue);
+    led_flush();
+  }
 }
 
 /** Set indicator led pattern via libhybris
@@ -845,25 +1069,7 @@ bool mce_hybris_indicator_set_pattern(int r, int g, int b, int ms_on, int ms_off
       ms_off = ms_on = 0;
     }
 
-    // zero brightness
-    led_control_value(0, 0);
-    led_control_value(1, 0);
-    led_control_value(2, 0);
-
-    // blink off
-    led_control_blink(0, 0, 0);
-    led_control_blink(1, 0, 0);
-    led_control_blink(2, 0, 0);
-
-    // blink setting
-    if( r ) led_control_blink(0, ms_on, ms_off);
-    if( g ) led_control_blink(1, ms_on, ms_off);
-    if( b ) led_control_blink(2, ms_on, ms_off);
-
-    // specify color
-    led_control_value(0, r);
-    led_control_value(1, g);
-    led_control_value(2, b);
+    led_queue_schedule(&led_queue, r, g, b, ms_on, ms_off);
 
     ack = true;
     goto cleanup;
