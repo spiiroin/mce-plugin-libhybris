@@ -39,23 +39,23 @@ chmod 755 %{buildroot}%{_libdir}/mce/modules/hybris.so
 %pre
 if [ "$1" = "2" ]; then
   # upgrade
-  systemctl stop mce.service
+  systemctl stop mce.service || :
 fi
 
 %post
 # upgrade or install
-systemctl restart mce.service
+systemctl restart mce.service || :
 
 %preun
 if [ "$1" = "0" ]; then
   # uninstall
-  systemctl stop mce.service
+  systemctl stop mce.service || :
 fi
 
 %postun
 if [ "$1" = "0" ]; then
   # uninstall
-  systemctl start mce.service
+  systemctl start mce.service || :
 fi
 
 %files
