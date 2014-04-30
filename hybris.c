@@ -921,7 +921,11 @@ static gboolean led_ctrl_step_cb(gpointer aptr)
     goto cleanup;
   }
 
-  size_t i = led_ctrl_breathe.step++ % led_ctrl_breathe.steps;
+  if( led_ctrl_breathe.step >= led_ctrl_breathe.steps ) {
+    led_ctrl_breathe.step = 0;
+  }
+
+  size_t i = led_ctrl_breathe.step++;
 
   int v = led_ctrl_breathe.value[i];
   int r = (led_ctrl_curr.r * v + 255 - 1) / 255;
