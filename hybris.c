@@ -1112,6 +1112,19 @@ void mce_hybris_indicator_quit(void)
   }
 }
 
+/** Clamp integer values to given range
+ *
+ * @param lo  minimum value allowed
+ * @param hi  maximum value allowed
+ * @param val value to clamp
+ *
+ * @return val clamped to [lo, hi]
+ */
+static inline int clamp_to_range(int lo, int hi, int val)
+{
+  return val <= lo ? lo : val <= hi ? val : hi;
+}
+
 /** Set indicator led pattern via libhybris
  *
  * @param r     red intensity 0 ... 255
@@ -1129,13 +1142,26 @@ bool mce_hybris_indicator_set_pattern(int r, int g, int b,
 
   /* Sanitize input values */
 
-  if( ms_on <= 0 || ms_off <= 0 ) {
-    ms_off = ms_on = 0;
+  /* Clamp time periods to [0, 60] second range.
+   *
+   * While periods longer than few seconds might not count as "blinking",
+   * we need to leave some slack to allow beacon style patterns with
+   * relatively long off periods */
+  ms_on  = clamp_to_range(0, 60000, ms_on);
+  ms_off = clamp_to_range(0, 60000, ms_off);
+
+  /* Both on and off periods need to be non-zero for the blinking
+   * to happen in the first place. And if the periods are too
+   * short it starts to look like led failure more than indication
+   * of something. */
+  if( ms_on < 50 || ms_off < 50 ) {
+    ms_on = ms_off = 0;
   }
 
-  if( r < 0 || g < 0 || b < 0 ) {
-    r = g = b = 0;
-  }
+  /* Clamp rgb values to [0, 255] range */
+  r = clamp_to_range(0, 255, r);
+  g = clamp_to_range(0, 255, g);
+  b = clamp_to_range(0, 255, b);
 
   /* Use raw sysfs controls if possible */
 
