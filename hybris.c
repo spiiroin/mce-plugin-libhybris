@@ -832,16 +832,32 @@ cleanup:
   return res;
 }
 
-/** Change color and blinking attributes of a LED */
-static void led_ctrl_blink(int chn, int on, int off)
+/** Change blinking attributes of a LED channel */
+static void led_ctrl_set_channel_blink(int chn, int on, int off)
 {
   led_state_set_blink(led_states + chn, on, off);
 }
 
-/** Change color and blinking attributes of a LED */
-static void led_ctrl_value(int chn, int val)
+/** Change intensity attribute of a LED channel */
+static void led_ctrl_set_channel_value(int chn, int val)
 {
   led_state_set_value(led_states + chn, val);
+}
+
+/** Change blinking attributes of RGB led */
+static void led_ctrl_set_rgb_blink(int on, int off)
+{
+  led_ctrl_set_channel_blink(0, on, off);
+  led_ctrl_set_channel_blink(1, on, off);
+  led_ctrl_set_channel_blink(2, on, off);
+}
+
+/** Change intensity attributes of RGB led */
+static void led_ctrl_set_rgb_value(int r, int g, int b)
+{
+  led_ctrl_set_channel_value(0, r);
+  led_ctrl_set_channel_value(1, g);
+  led_ctrl_set_channel_value(2, b);
 }
 
 /** Generate intensity curve for use from breathing timer
@@ -898,14 +914,10 @@ static gboolean led_ctrl_static_cb(gpointer aptr)
   led_ctrl_step_id = 0;
 
   // blink
-  led_ctrl_blink(0, led_ctrl_curr.on, led_ctrl_curr.off);
-  led_ctrl_blink(1, led_ctrl_curr.on, led_ctrl_curr.off);
-  led_ctrl_blink(2, led_ctrl_curr.on, led_ctrl_curr.off);
+  led_ctrl_set_rgb_blink(led_ctrl_curr.on, led_ctrl_curr.off);
 
   // color
-  led_ctrl_value(0, led_ctrl_curr.r);
-  led_ctrl_value(1, led_ctrl_curr.g);
-  led_ctrl_value(2, led_ctrl_curr.b);
+  led_ctrl_set_rgb_value(led_ctrl_curr.r, led_ctrl_curr.g, led_ctrl_curr.b);
 
 cleanup:
   return FALSE;
@@ -932,9 +944,7 @@ static gboolean led_ctrl_step_cb(gpointer aptr)
   int g = (led_ctrl_curr.g * v + 255 - 1) / 255;
   int b = (led_ctrl_curr.b * v + 255 - 1) / 255;
 
-  led_ctrl_value(0, r);
-  led_ctrl_value(1, g);
-  led_ctrl_value(2, b);
+  led_ctrl_set_rgb_value(r, g, b);
 
 cleanup:
   return led_ctrl_step_id != 0;
@@ -952,14 +962,10 @@ static gboolean led_ctrl_stop_cb(gpointer aptr)
   led_ctrl_stop_id = 0;
 
   // blink off
-  led_ctrl_blink(0, 0, 0);
-  led_ctrl_blink(1, 0, 0);
-  led_ctrl_blink(2, 0, 0);
+  led_ctrl_set_rgb_blink(0, 0);
 
   // zero brightness
-  led_ctrl_value(0, 0);
-  led_ctrl_value(1, 0);
-  led_ctrl_value(2, 0);
+  led_ctrl_set_rgb_value(0, 0, 0);
 
   if( !led_request_has_color(&led_ctrl_curr) ) {
     goto cleanup;
@@ -1110,14 +1116,10 @@ void mce_hybris_indicator_quit(void)
     led_ctrl_wait_kernel();
 
     // blink off
-    led_ctrl_blink(0, 0, 0);
-    led_ctrl_blink(1, 0, 0);
-    led_ctrl_blink(2, 0, 0);
+    led_ctrl_set_rgb_blink(0, 0);
 
     // zero brightness
-    led_ctrl_value(0, 0);
-    led_ctrl_value(1, 0);
-    led_ctrl_value(2, 0);
+    led_ctrl_set_rgb_value(0, 0, 0);
 
     // close sysfs files
     led_ctrl_close_sysfs_files();
