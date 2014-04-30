@@ -741,8 +741,11 @@ static led_state_t led_states[3] =
 /** Minimum delay between breathing steps */
 #define LED_CTRL_BREATHING_DELAY 20 // [ms]
 
-/** Maximum number of breathing steps */
+/** Maximum number of breathing steps; rise and fall time combined */
 #define LED_CTRL_MAX_STEPS 256
+
+/** Minimum number of breathing steps on rise/fall time */
+#define LED_CTRL_MIN_STEPS 7
 
 /** Led request parameters */
 typedef struct
@@ -995,12 +998,17 @@ led_ctrl_start(const led_request_t *next)
 
   led_ctrl_breathe.delay = 0;
 
-  /* Note: We do not want to use sw breathing for rapidly
-   *       blinking display state panic indicators etc */
+  /* Whether a pattern should breathe or not is decided at mce side */
+  if( breathing ) {
+    /* But, since there are limitations on how often the led intensity
+     * can be changed, we must check that the rise/fall times are long
+     * enough to allow a reasonable amount of adjustments to be made. */
 
-  if( breathing && next->on >= 200 && next->off >= 200 )
-  {
-    led_ctrl_generate_ramp(next->on, next->off);
+    int min_period = LED_CTRL_BREATHING_DELAY * LED_CTRL_MIN_STEPS;
+
+    if( next->on >= min_period && next->off >= min_period ) {
+      led_ctrl_generate_ramp(next->on, next->off);
+    }
   }
 
   /* Schedule led off after kernel settle timeout; once that
