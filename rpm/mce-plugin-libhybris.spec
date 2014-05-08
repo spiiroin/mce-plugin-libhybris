@@ -1,6 +1,6 @@
 Name:       mce-plugin-libhybris
 Summary:    Libhybris plugin for Mode Control Entity
-Version:    1.1.4
+Version:    1.2.0
 Release:    1
 Group:      System/System Control
 License:    LGPLv2.1
