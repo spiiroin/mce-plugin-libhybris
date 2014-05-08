@@ -101,7 +101,7 @@ LDLIBS   += $(PKG_LDLIBS)
 # Explicit dependencies
 # ----------------------------------------------------------------------------
 
-hybris.so : LDLIBS += -lhardware
+hybris.so : LDLIBS += -lhardware -lm
 hybris.so : hybris.o
 
 install:: hybris.so
