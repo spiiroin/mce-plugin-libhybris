@@ -1126,13 +1126,17 @@ led_ctrl_start(const led_request_t *next)
     goto cleanup;
   }
 
-  // Assume: we need to reset led before change
+  /* Assumption: Before changing the led state, we need to wait a bit
+   * for kernel side to finish with last change we made and then possibly
+   * reset the blinking status and wait a bit more */
   bool restart = true;
 
   led_style_t old_style = led_request_get_style(&led_ctrl_curr);
   led_style_t new_style = led_request_get_style(&work);
 
-  // Exception: breathing without timing change
+  /* Exception: When we are already breathing and continue to
+   * breathe, the blinking is not in use and the breathing timer
+   * is keeping the updates far enough from each other */
   if( old_style == STYLE_BREATH && new_style == STYLE_BREATH &&
       led_request_has_equal_timing(&led_ctrl_curr, &work) ) {
     restart = false;
