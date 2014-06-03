@@ -1410,6 +1410,8 @@ bool mce_hybris_indicator_set_brightness(int level)
   led_ctrl_start(&work);
 
 cleanup:
+  /* Note: failure means this function is not available - which is
+   * handled at mce side stub. From this plugin we always return true */
   return true;
 }
 
