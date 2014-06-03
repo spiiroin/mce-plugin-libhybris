@@ -260,9 +260,10 @@ static void mce_hybris_modfb_unload(void)
  */
 static int
 mce_framebuffer_open(const struct hw_module_t* module,
-		     struct framebuffer_device_t** device) {
+                     struct framebuffer_device_t** device)
+{
   return module->methods->open(module, GRALLOC_HARDWARE_FB0,
-			       (struct hw_device_t**)device);
+                               (struct hw_device_t**)device);
 }
 
 /** Convenience function for closing frame buffer device
@@ -270,8 +271,9 @@ mce_framebuffer_open(const struct hw_module_t* module,
  * Similar to what we might or might not have available from hardware/fb.h
  */
 static int
-mce_framebuffer_close(struct framebuffer_device_t* device) {
-    return device->common.close(&device->common);
+mce_framebuffer_close(struct framebuffer_device_t* device)
+{
+  return device->common.close(&device->common);
 }
 
 /** Initialize libhybris frame buffer device object
@@ -396,9 +398,9 @@ static void mce_hybris_modlights_unload(void)
  */
 static int
 mce_light_device_open(const struct hw_module_t* module, const char *id,
-		  struct light_device_t** device)
+                      struct light_device_t** device)
 {
-    return module->methods->open(module, id, (struct hw_device_t**)device);
+  return module->methods->open(module, id, (struct hw_device_t**)device);
 }
 
 /** Convenience function for closing a light device
@@ -1417,10 +1419,10 @@ cleanup:
  */
 static int
 mce_sensors_open(const struct hw_module_t* module,
-	     struct sensors_poll_device_t** device)
+                 struct sensors_poll_device_t** device)
 {
   return module->methods->open(module, SENSORS_HARDWARE_POLL,
-			       (struct hw_device_t**)device);
+                               (struct hw_device_t**)device);
 }
 
 /** Convenience function for closing sensors device
