@@ -260,9 +260,10 @@ static void mce_hybris_modfb_unload(void)
  */
 static int
 mce_framebuffer_open(const struct hw_module_t* module,
-		     struct framebuffer_device_t** device) {
+                     struct framebuffer_device_t** device)
+{
   return module->methods->open(module, GRALLOC_HARDWARE_FB0,
-			       (struct hw_device_t**)device);
+                               (struct hw_device_t**)device);
 }
 
 /** Convenience function for closing frame buffer device
@@ -270,8 +271,9 @@ mce_framebuffer_open(const struct hw_module_t* module,
  * Similar to what we might or might not have available from hardware/fb.h
  */
 static int
-mce_framebuffer_close(struct framebuffer_device_t* device) {
-    return device->common.close(&device->common);
+mce_framebuffer_close(struct framebuffer_device_t* device)
+{
+  return device->common.close(&device->common);
 }
 
 /** Initialize libhybris frame buffer device object
@@ -396,9 +398,9 @@ static void mce_hybris_modlights_unload(void)
  */
 static int
 mce_light_device_open(const struct hw_module_t* module, const char *id,
-		  struct light_device_t** device)
+                      struct light_device_t** device)
 {
-    return module->methods->open(module, id, (struct hw_device_t**)device);
+  return module->methods->open(module, id, (struct hw_device_t**)device);
 }
 
 /** Convenience function for closing a light device
@@ -750,20 +752,33 @@ static led_state_t led_states[3] =
 /** Led request parameters */
 typedef struct
 {
-  int r,g,b;
-  int on,off;
+  int  r,g,b;    // color
+  int  on,off;   // blink timing
+  int  level;    // brightness [0 ... 255]
+  bool breathe;  // breathe instead of blinking
 } led_request_t;
+
+/** Test for led request blink/breathing timing equality
+ */
+static bool led_request_has_equal_timing(const led_request_t *self,
+                                         const led_request_t *that)
+{
+    return (self->on  == that->on &&
+            self->off == that->off);
+}
 
 /** Test for led request equality
  */
 static bool led_request_is_equal(const led_request_t *self,
                                  const led_request_t *that)
 {
-    return (self->r   == that->r  &&
-            self->g   == that->g  &&
-            self->b   == that->b  &&
-            self->on  == that->on &&
-            self->off == that->off);
+    return (self->r       == that->r  &&
+            self->g       == that->g  &&
+            self->b       == that->b  &&
+            self->on      == that->on &&
+            self->off     == that->off &&
+            self->level   == that->level &&
+            self->breathe == that->breathe);
 }
 
 /** Test for active led request
@@ -771,6 +786,60 @@ static bool led_request_is_equal(const led_request_t *self,
 static bool led_request_has_color(const led_request_t *self)
 {
     return self->r > 0 || self->g > 0 || self->b > 0;
+}
+
+/** Normalize/sanity check requested values
+ */
+static void led_request_sanitize(led_request_t *self)
+{
+  int min_period = LED_CTRL_BREATHING_DELAY * LED_CTRL_MIN_STEPS;
+
+  if( !led_request_has_color(self) ) {
+    /* blinking/breathing black and black makes no sense */
+    self->on  = 0;
+    self->off = 0;
+    self->breathe = false;
+  }
+  else if( self->on <= 0 || self->off <= 0) {
+    /* both on and off periods must be > 0 for blinking/breathing */
+    self->on  = 0;
+    self->off = 0;
+    self->breathe = false;
+  }
+  else if( self->on < min_period || self->off < min_period ) {
+    /* Whether a pattern should breathe or not is decided at mce side.
+     * But, since there are limitations on how often the led intensity
+     * can be changed, we must check that the rise/fall times are long
+     * enough to allow a reasonable amount of adjustments to be made. */
+    self->breathe = false;
+  }
+}
+
+/** Different styles of led patterns */
+typedef enum {
+  STYLE_OFF,     // led is off
+  STYLE_STATIC,  // led has constant color
+  STYLE_BLINK,   // led is blinking with on/off periods
+  STYLE_BREATH,  // led is breathing with rise/fall times
+} led_style_t;
+
+/** Evaluate request style
+ */
+static led_style_t led_request_get_style(const led_request_t *self)
+{
+  if( !led_request_has_color(self) ) {
+    return STYLE_OFF;
+  }
+
+  if( self->on <= 0 || self->off <= 0 ) {
+    return STYLE_STATIC;
+  }
+
+  if( self->breathe ) {
+    return STYLE_BREATH;
+  }
+
+  return STYLE_BLINK;
 }
 
 /** Intensity curve for sw breathing */
@@ -789,11 +858,22 @@ static struct {
 /** Flag for: controls for RGB leds exist in sysfs */
 static bool led_ctrl_uses_sysfs = false;
 
-/** Flag for: breathing via sw is allowed */
-static bool led_ctrl_breathing_enabled = false;
+/** Currently active RGB led state; initialize to invalid color */
+static led_request_t led_ctrl_curr =
+{
+  /* force 1st change to take effect by initializing to invalid color */
+  .r       = -1,
+  .g       = -1,
+  .b       = -1,
 
-/** Currently active RGB led state; initialize to invalid */
-static led_request_t led_ctrl_curr = { .r = -1, };
+  /* not blinking or breathing */
+  .on      = 0,
+  .off     = 0,
+  .breathe = false,
+
+  /* full brightness */
+  .level   = 255,
+};
 
 /** Close all LED sysfs files */
 static void led_ctrl_close_sysfs_files(void)
@@ -830,6 +910,19 @@ cleanup:
   }
 
   return res;
+}
+
+/** Helper for scaling values in 0-255 range
+ *
+ * @param value input value in [0...255] range
+ * @param scale scaling factor [0...255]
+ *
+ * @return scaled value [0...255]
+ */
+static inline int led_ctrl_scale_value(int value, int scale)
+{
+  /* round up */
+  return (value * scale + 255 - 1) / 255;
 }
 
 /** Change blinking attributes of a LED channel */
@@ -913,11 +1006,21 @@ static gboolean led_ctrl_static_cb(gpointer aptr)
 
   led_ctrl_step_id = 0;
 
-  // blink
-  led_ctrl_set_rgb_blink(led_ctrl_curr.on, led_ctrl_curr.off);
+  // get configured color
+  int r = led_ctrl_curr.r;
+  int g = led_ctrl_curr.g;
+  int b = led_ctrl_curr.b;
 
-  // color
-  led_ctrl_set_rgb_value(led_ctrl_curr.r, led_ctrl_curr.g, led_ctrl_curr.b);
+  // adjust by brightness level
+  int l = led_ctrl_curr.level;
+
+  r = led_ctrl_scale_value(r, l);
+  g = led_ctrl_scale_value(g, l);
+  b = led_ctrl_scale_value(b, l);
+
+  // set led blinking and color
+  led_ctrl_set_rgb_blink(led_ctrl_curr.on, led_ctrl_curr.off);
+  led_ctrl_set_rgb_value(r, g, b);
 
 cleanup:
   return FALSE;
@@ -937,20 +1040,36 @@ static gboolean led_ctrl_step_cb(gpointer aptr)
     led_ctrl_breathe.step = 0;
   }
 
+  // get configured color
+  int r = led_ctrl_curr.r;
+  int g = led_ctrl_curr.g;
+  int b = led_ctrl_curr.b;
+
+  // adjust by brightness level
+  int l = led_ctrl_curr.level;
+
+  r = led_ctrl_scale_value(r, l);
+  g = led_ctrl_scale_value(g, l);
+  b = led_ctrl_scale_value(b, l);
+
+  // adjust by curve position
   size_t i = led_ctrl_breathe.step++;
+  int    v = led_ctrl_breathe.value[i];
 
-  int v = led_ctrl_breathe.value[i];
-  int r = (led_ctrl_curr.r * v + 255 - 1) / 255;
-  int g = (led_ctrl_curr.g * v + 255 - 1) / 255;
-  int b = (led_ctrl_curr.b * v + 255 - 1) / 255;
+  r = led_ctrl_scale_value(r, v);
+  g = led_ctrl_scale_value(g, v);
+  b = led_ctrl_scale_value(b, v);
 
+  // set led color
   led_ctrl_set_rgb_value(r, g, b);
 
 cleanup:
   return led_ctrl_step_id != 0;
 }
 
-/** Timer callback from stopping led
+static bool reset_blinking = true;
+
+/** Timer callback from stopping/restarting led
  */
 static gboolean led_ctrl_stop_cb(gpointer aptr)
 {
@@ -961,23 +1080,32 @@ static gboolean led_ctrl_stop_cb(gpointer aptr)
   }
   led_ctrl_stop_id = 0;
 
-  // blink off
-  led_ctrl_set_rgb_blink(0, 0);
-
-  // zero brightness
-  led_ctrl_set_rgb_value(0, 0, 0);
+  if( reset_blinking ) {
+    // blinking off - must be followed by rgb set to have an effect
+    led_ctrl_set_rgb_blink(0, 0);
+  }
 
   if( !led_request_has_color(&led_ctrl_curr) ) {
-    goto cleanup;
-  }
-
-  if( led_ctrl_breathe.delay > 0 ) {
-    led_ctrl_step_id = g_timeout_add(led_ctrl_breathe.delay,
-                                     led_ctrl_step_cb, 0);
+    // set rgb to black before returning
+    reset_blinking = true;
   }
   else {
-    led_ctrl_step_id = g_timeout_add(LED_CTRL_KERNEL_DELAY,
-                                     led_ctrl_static_cb, 0);
+    if( led_ctrl_breathe.delay > 0 ) {
+      // start breathing timer
+      led_ctrl_step_id = g_timeout_add(led_ctrl_breathe.delay,
+                                       led_ctrl_step_cb, 0);
+    }
+    else {
+      // set rgb to target after timer delay
+      led_ctrl_step_id = g_timeout_add(LED_CTRL_KERNEL_DELAY,
+                                       led_ctrl_static_cb, 0);
+    }
+  }
+
+  if( reset_blinking ) {
+    // set rgb to black
+    led_ctrl_set_rgb_value(0, 0, 0);
+    reset_blinking = false;
   }
 
 cleanup:
@@ -990,45 +1118,56 @@ cleanup:
 static void
 led_ctrl_start(const led_request_t *next)
 {
-  static bool breathing = false;
+  led_request_t work = *next;
 
-  if( breathing == led_ctrl_breathing_enabled &&
-      led_request_is_equal(&led_ctrl_curr, next) )
-  {
-    // no change
+  led_request_sanitize(&work);
+
+  if( led_request_is_equal(&led_ctrl_curr, &work) ) {
     goto cleanup;
   }
 
-  breathing = led_ctrl_breathing_enabled;
-  led_ctrl_curr = *next;
+  /* Assumption: Before changing the led state, we need to wait a bit
+   * for kernel side to finish with last change we made and then possibly
+   * reset the blinking status and wait a bit more */
+  bool restart = true;
 
-  if( led_ctrl_step_id ) {
-    g_source_remove(led_ctrl_step_id), led_ctrl_step_id = 0;
+  led_style_t old_style = led_request_get_style(&led_ctrl_curr);
+  led_style_t new_style = led_request_get_style(&work);
+
+  /* Exception: When we are already breathing and continue to
+   * breathe, the blinking is not in use and the breathing timer
+   * is keeping the updates far enough from each other */
+  if( old_style == STYLE_BREATH && new_style == STYLE_BREATH &&
+      led_request_has_equal_timing(&led_ctrl_curr, &work) ) {
+    restart = false;
   }
 
-  led_ctrl_breathe.delay = 0;
+  led_ctrl_curr = work;
 
-  /* Whether a pattern should breathe or not is decided at mce side */
-  if( breathing ) {
-    /* But, since there are limitations on how often the led intensity
-     * can be changed, we must check that the rise/fall times are long
-     * enough to allow a reasonable amount of adjustments to be made. */
+  if( restart ) {
+    // stop existing breathing timer
+    if( led_ctrl_step_id ) {
+      g_source_remove(led_ctrl_step_id), led_ctrl_step_id = 0;
+    }
 
-    int min_period = LED_CTRL_BREATHING_DELAY * LED_CTRL_MIN_STEPS;
+    // re-evaluate breathing constants
+    led_ctrl_breathe.delay = 0;
+    if( new_style == STYLE_BREATH ) {
+      led_ctrl_generate_ramp(work.on, work.off);
+    }
 
-    if( next->on >= min_period && next->off >= min_period ) {
-      led_ctrl_generate_ramp(next->on, next->off);
+    /* Schedule led off after kernel settle timeout; once that
+     * is done, new led color/blink/breathing will be started */
+    if( !led_ctrl_stop_id ) {
+      reset_blinking = (old_style == STYLE_BLINK ||
+                        new_style == STYLE_BLINK);
+      led_ctrl_stop_id = g_timeout_add(LED_CTRL_KERNEL_DELAY,
+                                       led_ctrl_stop_cb, 0);
     }
   }
 
-  /* Schedule led off after kernel settle timeout; once that
-   * is done, new led color/blink/breathing will be started */
-  if( !led_ctrl_stop_id ) {
-    led_ctrl_stop_id = g_timeout_add(LED_CTRL_KERNEL_DELAY,
-                                     led_ctrl_stop_cb, 0);
-  }
-
 cleanup:
+
   return;
 }
 
@@ -1060,14 +1199,11 @@ bool mce_hybris_indicator_init(void)
   if( led_ctrl_uses_sysfs ) {
     /* Use raw sysfs controls */
 
-    led_request_t req =
-    {
-      .r   = 0,
-      .g   = 0,
-      .b   = 0,
-      .on  = 0,
-      .off = 0,
-    };
+    /* adjust current state to: color=black */
+    led_request_t req = led_ctrl_curr;
+    req.r = 0;
+    req.g = 0;
+    req.b = 0;
     led_ctrl_start(&req);
   }
   else {
@@ -1181,14 +1317,13 @@ bool mce_hybris_indicator_set_pattern(int r, int g, int b,
 
   if( led_ctrl_uses_sysfs ) {
 
-    led_request_t req =
-    {
-      .r   = r,
-      .g   = g,
-      .b   = b,
-      .on  = ms_on,
-      .off = ms_off,
-    };
+    /* adjust current state to: color & timing as requested */
+    led_request_t req = led_ctrl_curr;
+    req.r   = r;
+    req.g   = g;
+    req.b   = b;
+    req.on  = ms_on;
+    req.off = ms_off;
     led_ctrl_start(&req);
 
     ack = true;
@@ -1244,19 +1379,40 @@ void mce_hybris_indicator_enable_breathing(bool enable)
     goto cleanup;
   }
 
-  if( led_ctrl_breathing_enabled == enable ) {
-    // no change in state
-    goto cleanup;
-  }
-
-  mce_log(LOG_DEBUG, "breathing=%s", enable ? "enabled" : "disabled");
-
-  // restart current pattern
-  led_ctrl_breathing_enabled = enable;
-  led_ctrl_start(&led_ctrl_curr);
+  /* adjust current state to: breathing as requested */
+  led_request_t work = led_ctrl_curr;
+  work.breathe = enable;
+  led_ctrl_start(&work);
 
 cleanup:
   return;
+}
+
+/** Set indicator led brightness
+ *
+ * @param level 1=minimum, 255=maximum
+ *
+ * @return true on success, or false on failure
+ */
+bool mce_hybris_indicator_set_brightness(int level)
+{
+  if( !led_ctrl_uses_sysfs ) {
+    // no breathing control via hybris api
+    goto cleanup;
+  }
+
+  /* Clamp brightness values to [1, 255] range */
+  level = clamp_to_range(1, 255, level);
+
+  /* adjust current state to: brightness as requested */
+  led_request_t work = led_ctrl_curr;
+  work.level = level;
+  led_ctrl_start(&work);
+
+cleanup:
+  /* Note: failure means this function is not available - which is
+   * handled at mce side stub. From this plugin we always return true */
+  return true;
 }
 
 /* ========================================================================= *
@@ -1269,10 +1425,10 @@ cleanup:
  */
 static int
 mce_sensors_open(const struct hw_module_t* module,
-	     struct sensors_poll_device_t** device)
+                 struct sensors_poll_device_t** device)
 {
   return module->methods->open(module, SENSORS_HARDWARE_POLL,
-			       (struct hw_device_t**)device);
+                               (struct hw_device_t**)device);
 }
 
 /** Convenience function for closing sensors device
