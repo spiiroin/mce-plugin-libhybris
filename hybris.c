@@ -388,9 +388,9 @@ static void mce_hybris_modlights_unload(void)
   // FIXME: how to unload libhybris modules?
 }
 
-/* ------------------------------------------------------------------------- *
- * display backlight device
- * ------------------------------------------------------------------------- */
+/* ========================================================================= *
+ * LIGHTS module: display backlight device
+ * ========================================================================= */
 
 /** Convenience function for opening a light device
  *
@@ -488,9 +488,9 @@ cleanup:
   return ack;
 }
 
-/* ------------------------------------------------------------------------- *
- * keypad backlight device
- * ------------------------------------------------------------------------- */
+/* ========================================================================= *
+ * LIGHTS module: keypad backlight device
+ * ========================================================================= */
 
 /** Initialize libhybris keypad backlight device object
  *
@@ -567,12 +567,16 @@ cleanup:
   return ack;
 }
 
+/* ========================================================================= *
+ * LIGHTS module: indicator led device
+ * ========================================================================= */
+
 /* ------------------------------------------------------------------------- *
- * indicator led device
+ * generic led utils
  * ------------------------------------------------------------------------- */
 
 /** Read number from file */
-static int read_number(const char *path)
+static int led_util_read_number(const char *path)
 {
   int res = -1;
   int fd  = -1;
@@ -594,148 +598,546 @@ cleanup:
   return res;
 }
 
-/** Sysfs control paths for a led */
-typedef struct
-{
-  const char *on;  // W
-  const char *off; // W
-  const char *val; // W
-  const char *max; // R
-} led_paths_t;
-
-/** Sysfs state for a led */
-typedef struct
-{
-  int fd_on;
-  int fd_off;
-  int fd_val;
-  int maxval;
-} led_state_t;
-
-/** Set LED brightness
- *
- * @param self led state
- * @param val  brightness in 0 ... 255 range
+/** Close led sysfs control file
  */
-static void led_state_set_value(const led_state_t *self, int val)
+static void led_util_close_file(int *fd_ptr)
 {
-  // transform and clamp from [0 ... 255] to [0 ... maxval]
-  val = val * self->maxval / 255;
-  if( val > self->maxval ) val = self->maxval;
-  if( val < 0 ) val = 0;
-
-  dprintf(self->fd_val, "%d", val);
+  if( *fd_ptr != -1 )
+  {
+    close(*fd_ptr), *fd_ptr = -1;
+  }
 }
 
-/** Set LED blinking period
+/** Open led sysfs control file in append mode
+ */
+static bool led_util_open_file(int *fd_ptr, const char *path)
+{
+  led_util_close_file(fd_ptr);
+  *fd_ptr = open(path, O_WRONLY|O_APPEND);
+  return *fd_ptr != -1;
+}
+
+/** Scale value from 0...255 to 0...max range
+ */
+static int led_util_scale_value(int in, int max)
+{
+  int out = (in * max + 128) / 255;
+
+  return (out < 0) ? 0 : (out < max) ? out : max;
+}
+
+/* ------------------------------------------------------------------------- *
+ * vanilla sysfs controls for one channel in RGB led
+ * ------------------------------------------------------------------------- */
+
+typedef struct
+{
+  const char *max; // R
+  const char *val; // W
+  const char *on;  // W
+  const char *off; // W
+} led_paths_vanilla_t;
+
+typedef struct
+{
+  int maxval;
+  int fd_val;
+  int fd_on;
+  int fd_off;
+} led_state_vanilla_t;
+
+static void
+led_state_vanilla_init(led_state_vanilla_t *self)
+{
+  self->fd_on  = -1;
+  self->fd_off = -1;
+  self->fd_val = -1;
+  self->maxval = -1;
+}
+
+static void
+led_state_vanilla_close(led_state_vanilla_t *self)
+{
+  led_util_close_file(&self->fd_on);
+  led_util_close_file(&self->fd_off);
+  led_util_close_file(&self->fd_val);
+}
+
+static bool
+led_state_vanilla_probe(led_state_vanilla_t *self,
+                        const led_paths_vanilla_t *path)
+{
+  bool res = false;
+
+  led_state_vanilla_close(self);
+
+  if( (self->maxval = led_util_read_number(path->max)) <= 0 )
+  {
+    goto cleanup;
+  }
+
+  if( !led_util_open_file(&self->fd_val, path->val) ||
+      !led_util_open_file(&self->fd_on,  path->on)  ||
+      !led_util_open_file(&self->fd_off, path->off) )
+  {
+    goto cleanup;
+  }
+
+  res = true;
+
+cleanup:
+
+  if( !res ) led_state_vanilla_close(self);
+
+  return res;
+}
+
+static void
+led_state_vanilla_set_value(const led_state_vanilla_t *self,
+                            int value)
+{
+  if( self->fd_val != -1 )
+  {
+    dprintf(self->fd_val, "%d", led_util_scale_value(value, self->maxval));
+  }
+}
+static void
+led_state_vanilla_set_blink(const led_state_vanilla_t *self,
+                            int on_ms, int off_ms)
+{
+  if( self->fd_on != -1 && self->fd_off != -1 )
+  {
+    dprintf(self->fd_on,  "%d", on_ms);
+    dprintf(self->fd_off, "%d", off_ms);
+  }
+}
+
+/* ------------------------------------------------------------------------- *
+ * hammerhead sysfs controls for one channel in RGB led
+ * ------------------------------------------------------------------------- */
+
+typedef struct
+{
+  const char *max;    // R
+  const char *val;    // W
+  const char *on_off; // W
+  const char *enable; // W
+} led_paths_hammerhead_t;
+
+typedef struct
+{
+  int maxval;
+  int fd_val;
+  int fd_on_off;
+  int fd_enable;
+} led_state_hammerhead_t;
+
+static void
+led_state_hammerhead_init(led_state_hammerhead_t *self)
+{
+  self->maxval    = -1;
+  self->fd_val    = -1;
+  self->fd_on_off = -1;
+  self->fd_enable = -1;
+}
+
+static void
+led_state_hammerhead_close(led_state_hammerhead_t *self)
+{
+  led_util_close_file(&self->fd_val);
+  led_util_close_file(&self->fd_on_off);
+  led_util_close_file(&self->fd_enable);
+}
+
+static bool
+led_state_hammerhead_probe(led_state_hammerhead_t *self,
+                           const led_paths_hammerhead_t *path)
+{
+  bool res = false;
+
+  led_state_hammerhead_close(self);
+
+  if( (self->maxval = led_util_read_number(path->max)) <= 0 )
+  {
+    goto cleanup;
+  }
+
+  if( !led_util_open_file(&self->fd_val,    path->val)    ||
+      !led_util_open_file(&self->fd_on_off, path->on_off) ||
+      !led_util_open_file(&self->fd_enable, path->enable) )
+  {
+    goto cleanup;
+  }
+
+  res = true;
+
+cleanup:
+
+  if( !res ) led_state_hammerhead_close(self);
+
+  return res;
+}
+
+static void
+led_state_hammerhead_set_enabled(const led_state_hammerhead_t *self,
+                                 bool enable)
+{
+  if( self->fd_enable != -1 )
+  {
+    dprintf(self->fd_enable, "%d", enable);
+  }
+}
+
+static void
+led_state_hammerhead_set_value(const led_state_hammerhead_t *self,
+                               int value)
+{
+  if( self->fd_val != -1 )
+  {
+    dprintf(self->fd_val, "%d", led_util_scale_value(value, self->maxval));
+  }
+}
+
+static void
+led_state_hammerhead_set_blink(const led_state_hammerhead_t *self,
+                               int on_ms, int off_ms)
+{
+  if( self->fd_on_off != -1 )
+  {
+    char tmp[32];
+    int len = snprintf(tmp, sizeof tmp, "%d %d", on_ms, off_ms);
+    if( len > 0 && len <= (int)sizeof tmp )
+    {
+      write(self->fd_on_off, tmp, len);
+    }
+  }
+}
+
+/* ------------------------------------------------------------------------- *
+ * RGB led control: generic frontend
+ * ------------------------------------------------------------------------- */
+
+typedef struct led_control_t led_control_t;
+
+struct led_control_t
+{
+  const char *name;
+  void       *data;
+  void      (*enable)(void *data, bool enable);
+  void      (*blink)(void *data, int on_ms, int off_ms);
+  void      (*value)(void *data, int r, int g, int b);
+  void      (*close)(void *data);
+
+};
+
+static bool led_control_vanilla_probe(led_control_t *self);
+static bool led_control_hammerhead_probe(led_control_t *self);
+
+/** Set RGB LED enabled/disable
+ *
+ * @param self   control object
+ * @param enable true for enable, or false for disable
+ */
+static void
+led_control_enable(led_control_t *self, bool enable)
+{
+  if( self->enable )
+  {
+    self->enable(self->data, enable);
+  }
+}
+
+/** Set RGB LED blinking period
  *
  * If both on and off are greater than zero, then the PWM generator
  * is used to full intensity blinking. Otherwise it is used for
  * adjusting the LED brightness.
  *
- * @param self led state
+ * @param self control object
  * @param on   milliseconds on
  * @param off  milliseconds off
  */
-static void led_state_set_blink(const led_state_t *self, int on, int off)
+static void
+led_control_blink(led_control_t *self, int on_ms, int off_ms)
 {
-  dprintf(self->fd_on,  "%d", on);
-  dprintf(self->fd_off, "%d", off);
+  if( self->blink )
+  {
+    led_control_enable(self, false);
+    self->blink(self->data, on_ms, off_ms);
+  }
 }
 
-/** Clean up led state
+/** Set RGB LED color
  *
- * @param self led state
+ * @param self control object
+ * @param r    red intensity   (0 ... 255)
+ * @param g    green intensity (0 ... 255)
+ * @param b    blue intensity  (0 ... 255)
  */
-static void led_state_quit(led_state_t *self)
+static void
+led_control_value(led_control_t *self, int r, int g, int b)
 {
-  if( self->fd_on  != -1 ) close(self->fd_on),  self->fd_on  = -1;
-  if( self->fd_off != -1 ) close(self->fd_off), self->fd_off = -1;
-  if( self->fd_val != -1 ) close(self->fd_val), self->fd_val = -1;
-  self->maxval = 255;
+  if( self->value )
+  {
+    led_control_enable(self, false);
+    self->value(self->data, r, g, b);
+    led_control_enable(self, true);
+  }
 }
 
-/** Initialize led state
+/** Reset RGB led control object
  *
- * @param self led state
- * @param conf led config
+ * Initialize control object to closed but valid state.
+ *
+ * @param self  uninitialized control object
+ */
+static void
+led_control_init(led_control_t *self)
+{
+  self->name   = 0;
+  self->data   = 0;
+  self->enable = 0;
+  self->blink  = 0;
+  self->value  = 0;
+  self->close  = 0;
+}
+
+/** Set RGB LED enabled/disable
+ *
+ * @param self   control object
+ * @param enable true for enable, or false for disable
+ */
+
+static void
+led_control_close(led_control_t *self)
+{
+  if( self->close )
+  {
+    self->close(self->data);
+  }
+  led_control_init(self);
+}
+
+/** Probe sysfs for RGB LED controls
+ *
+ * @param self control object
  *
  * @return true if required control files were available, false otherwise
  */
-static bool led_state_init(led_state_t *self, const led_paths_t *conf)
+static bool
+led_control_probe(led_control_t *self)
 {
-  bool success = false;
+  led_control_init(self);
 
-  if( (self->maxval = read_number(conf->max)) <= 0 )
-  {
-    goto cleanup;
-  }
-  if( (self->fd_on = open(conf->on, O_WRONLY|O_APPEND)) == -1 )
-  {
-    goto cleanup;
-  }
-  if( (self->fd_off = open(conf->off, O_WRONLY|O_APPEND)) == -1 )
-  {
-    goto cleanup;
-  }
-  if( (self->fd_val = open(conf->val, O_WRONLY|O_APPEND)) == -1 )
-  {
-    goto cleanup;
-  }
-
-  success = true;
-
-cleanup:
-  return success;
+  return (led_control_vanilla_probe(self) ||
+          led_control_hammerhead_probe(self));
 }
 
-#define LED_PFIX "/sys/class/leds/led:rgb_"
+/* ------------------------------------------------------------------------- *
+ * RGB led control: default backend
+ * ------------------------------------------------------------------------- */
 
-/** Sysfs control paths for RGB leds */
-static const led_paths_t led_paths[3] =
+static void
+led_control_vanilla_blink_cb(void *data, int on_ms, int off_ms)
 {
-  {
-    .on  = LED_PFIX"red/blink_delay_on",
-    .off = LED_PFIX"red/blink_delay_off",
-    .val = LED_PFIX"red/brightness",
-    .max = LED_PFIX"red/max_brightness",
-  },
-  {
-    .on  = LED_PFIX"green/blink_delay_on",
-    .off = LED_PFIX"green/blink_delay_off",
-    .val = LED_PFIX"green/brightness",
-    .max = LED_PFIX"green/max_brightness",
-  },
-  {
-    .on  = LED_PFIX"blue/blink_delay_on",
-    .off = LED_PFIX"blue/blink_delay_off",
-    .val = LED_PFIX"blue/brightness",
-    .max = LED_PFIX"blue/max_brightness",
-  }
-};
+  const led_state_vanilla_t *self = data;
+  led_state_vanilla_set_blink(self + 0, on_ms, off_ms);
+  led_state_vanilla_set_blink(self + 1, on_ms, off_ms);
+  led_state_vanilla_set_blink(self + 2, on_ms, off_ms);
+}
 
-/** Sysfs state data for RGB leds */
-static led_state_t led_states[3] =
+static void
+led_control_vanilla_value_cb(void *data, int r, int g, int b)
 {
+  const led_state_vanilla_t *self = data;
+  led_state_vanilla_set_value(self + 0, r);
+  led_state_vanilla_set_value(self + 1, g);
+  led_state_vanilla_set_value(self + 2, b);
+}
+
+static void
+led_control_vanilla_close_cb(void *data)
+{
+  led_state_vanilla_t *self = data;
+  led_state_vanilla_close(self + 0);
+  led_state_vanilla_close(self + 1);
+  led_state_vanilla_close(self + 2);
+}
+
+static bool
+led_control_vanilla_probe(led_control_t *self)
+{
+
+#define LED_PFIX_VANILLA "/sys/class/leds/led:rgb_"
+
+  /** Sysfs control paths for RGB leds */
+  static const led_paths_vanilla_t paths[][3] =
   {
-    .fd_on  = -1,
-    .fd_off = -1,
-    .fd_val = -1,
-    .maxval = 255,
-  },
+    {
+      {
+        .on  = LED_PFIX_VANILLA"red/blink_delay_on",
+        .off = LED_PFIX_VANILLA"red/blink_delay_off",
+        .val = LED_PFIX_VANILLA"red/brightness",
+        .max = LED_PFIX_VANILLA"red/max_brightness",
+      },
+      {
+        .on  = LED_PFIX_VANILLA"green/blink_delay_on",
+        .off = LED_PFIX_VANILLA"green/blink_delay_off",
+        .val = LED_PFIX_VANILLA"green/brightness",
+        .max = LED_PFIX_VANILLA"green/max_brightness",
+      },
+      {
+        .on  = LED_PFIX_VANILLA"blue/blink_delay_on",
+        .off = LED_PFIX_VANILLA"blue/blink_delay_off",
+        .val = LED_PFIX_VANILLA"blue/brightness",
+        .max = LED_PFIX_VANILLA"blue/max_brightness",
+      }
+    },
+  };
+
+  static led_state_vanilla_t state[3];
+
+  bool res = false;
+
+  led_state_vanilla_init(state+0);
+  led_state_vanilla_init(state+1);
+  led_state_vanilla_init(state+2);
+
+  self->name   = "vanilla";
+  self->data   = state;
+  self->enable = 0;
+  self->blink  = led_control_vanilla_blink_cb;
+  self->value  = led_control_vanilla_value_cb;
+  self->close  = led_control_vanilla_close_cb;
+
+  for( size_t i = 0; i < numof(paths) ; ++i )
   {
-    .fd_on  = -1,
-    .fd_off = -1,
-    .fd_val = -1,
-    .maxval = 255,
-  },
-  {
-    .fd_on  = -1,
-    .fd_off = -1,
-    .fd_val = -1,
-    .maxval = 255,
+    if( led_state_vanilla_probe(&state[0], &paths[i][0]) &&
+        led_state_vanilla_probe(&state[1], &paths[i][1]) &&
+        led_state_vanilla_probe(&state[2], &paths[i][2]) )
+    {
+      res = true;
+      break;
+    }
   }
-};
+
+  if( !res )
+  {
+    led_control_close(self);
+  }
+
+  return res;
+}
+
+/* ------------------------------------------------------------------------- *
+ * RGB led control: hammerhead backend
+ * ------------------------------------------------------------------------- */
+
+static void
+led_control_hammerhead_enable_cb(void *data, bool enable)
+{
+  const led_state_hammerhead_t *self = data;
+  led_state_hammerhead_set_enabled(self + 0, enable);
+  led_state_hammerhead_set_enabled(self + 1, enable);
+  led_state_hammerhead_set_enabled(self + 2, enable);
+}
+
+static void
+led_control_hammerhead_blink_cb(void *data, int on_ms, int off_ms)
+{
+  const led_state_hammerhead_t *self = data;
+  led_state_hammerhead_set_blink(self + 0, on_ms, off_ms);
+  led_state_hammerhead_set_blink(self + 1, on_ms, off_ms);
+  led_state_hammerhead_set_blink(self + 2, on_ms, off_ms);
+}
+
+static void
+led_control_hammerhead_value_cb(void *data, int r, int g, int b)
+{
+  const led_state_hammerhead_t *self = data;
+  led_state_hammerhead_set_value(self + 0, r);
+  led_state_hammerhead_set_value(self + 1, g);
+  led_state_hammerhead_set_value(self + 2, b);
+}
+
+static void
+led_control_hammerhead_close_cb(void *data)
+{
+  led_state_hammerhead_t *self = data;
+  led_state_hammerhead_close(self + 0);
+  led_state_hammerhead_close(self + 1);
+  led_state_hammerhead_close(self + 2);
+}
+
+#define numof(a) (sizeof(a)/sizeof*(a))
+
+static bool
+led_control_hammerhead_probe(led_control_t *self)
+{
+#define LED_PFIX_HAMMERHEAD "/sys/class/leds/"
+
+  /** Sysfs control paths for RGB leds */
+  static const led_paths_hammerhead_t paths[][3] =
+  {
+    {
+      {
+        .max    = LED_PFIX_HAMMERHEAD"red/max_brightness",
+        .val    = LED_PFIX_HAMMERHEAD"red/brightness",
+        .on_off = LED_PFIX_HAMMERHEAD"red/on_off_ms",
+        .enable = LED_PFIX_HAMMERHEAD"red/rgb_start",
+      },
+      {
+        .max    = LED_PFIX_HAMMERHEAD"green/max_brightness",
+        .val    = LED_PFIX_HAMMERHEAD"green/brightness",
+        .on_off = LED_PFIX_HAMMERHEAD"green/on_off_ms",
+        .enable = LED_PFIX_HAMMERHEAD"green/rgb_start",
+      },
+      {
+        .max    = LED_PFIX_HAMMERHEAD"blue/max_brightness",
+        .val    = LED_PFIX_HAMMERHEAD"blue/brightness",
+        .on_off = LED_PFIX_HAMMERHEAD"blue/on_off_ms",
+        .enable = LED_PFIX_HAMMERHEAD"blue/rgb_start",
+      }
+    },
+  };
+
+  static led_state_hammerhead_t state[3];
+
+  bool res = false;
+
+  led_state_hammerhead_init(state+0);
+  led_state_hammerhead_init(state+1);
+  led_state_hammerhead_init(state+2);
+
+  self->name   = "hammerhead";
+  self->data   = state;
+  self->enable = led_control_hammerhead_enable_cb;
+  self->blink  = led_control_hammerhead_blink_cb;
+  self->value  = led_control_hammerhead_value_cb;
+  self->close  = led_control_hammerhead_close_cb;
+
+  for( size_t i = 0; i < numof(paths) ; ++i )
+  {
+    if( led_state_hammerhead_probe(&state[0], &paths[i][0]) &&
+        led_state_hammerhead_probe(&state[1], &paths[i][1]) &&
+        led_state_hammerhead_probe(&state[2], &paths[i][2]) )
+    {
+      res = true;
+      break;
+    }
+  }
+
+  if( !res )
+  {
+    led_control_close(self);
+  }
+
+  return res;
+}
+
+/* ------------------------------------------------------------------------- *
+ * LED control flow and timing logic underneath hybris API
+ * ------------------------------------------------------------------------- */
 
 /** Questimate of the duration of the kernel delayed work */
 #define LED_CTRL_KERNEL_DELAY 10 // [ms]
@@ -875,13 +1277,12 @@ static led_request_t led_ctrl_curr =
   .level   = 255,
 };
 
+static led_control_t led_control;
+
 /** Close all LED sysfs files */
 static void led_ctrl_close_sysfs_files(void)
 {
-  for( int i = 0; i < 3; ++i )
-  {
-    led_state_quit(led_states + i);
-  }
+  led_control_close(&led_control);
 }
 
 /** Open sysfs control files for RGB leds
@@ -890,67 +1291,24 @@ static void led_ctrl_close_sysfs_files(void)
  */
 static bool led_ctrl_probe_sysfs_files(void)
 {
-  bool res = false;
+  bool probed = led_control_probe(&led_control);
 
-  for( int i = 0; i < 3; ++i )
-  {
-    if( !led_state_init(led_states + i, led_paths + i) )
-    {
-      goto cleanup;
-    }
-  }
+  mce_log(LOG_DEBUG, "led sysfs backend: %s",
+          probed ? led_control.name : "N/A");
 
-  res = true;
-
-cleanup:
-
-  if( !res )
-  {
-    led_ctrl_close_sysfs_files();
-  }
-
-  return res;
-}
-
-/** Helper for scaling values in 0-255 range
- *
- * @param value input value in [0...255] range
- * @param scale scaling factor [0...255]
- *
- * @return scaled value [0...255]
- */
-static inline int led_ctrl_scale_value(int value, int scale)
-{
-  /* round up */
-  return (value * scale + 255 - 1) / 255;
-}
-
-/** Change blinking attributes of a LED channel */
-static void led_ctrl_set_channel_blink(int chn, int on, int off)
-{
-  led_state_set_blink(led_states + chn, on, off);
-}
-
-/** Change intensity attribute of a LED channel */
-static void led_ctrl_set_channel_value(int chn, int val)
-{
-  led_state_set_value(led_states + chn, val);
+  return probed;
 }
 
 /** Change blinking attributes of RGB led */
 static void led_ctrl_set_rgb_blink(int on, int off)
 {
-  led_ctrl_set_channel_blink(0, on, off);
-  led_ctrl_set_channel_blink(1, on, off);
-  led_ctrl_set_channel_blink(2, on, off);
+  led_control_blink(&led_control, on, off);
 }
 
 /** Change intensity attributes of RGB led */
 static void led_ctrl_set_rgb_value(int r, int g, int b)
 {
-  led_ctrl_set_channel_value(0, r);
-  led_ctrl_set_channel_value(1, g);
-  led_ctrl_set_channel_value(2, b);
+  led_control_value(&led_control, r, g, b);
 }
 
 /** Generate intensity curve for use from breathing timer
@@ -1014,9 +1372,9 @@ static gboolean led_ctrl_static_cb(gpointer aptr)
   // adjust by brightness level
   int l = led_ctrl_curr.level;
 
-  r = led_ctrl_scale_value(r, l);
-  g = led_ctrl_scale_value(g, l);
-  b = led_ctrl_scale_value(b, l);
+  r = led_util_scale_value(r, l);
+  g = led_util_scale_value(g, l);
+  b = led_util_scale_value(b, l);
 
   // set led blinking and color
   led_ctrl_set_rgb_blink(led_ctrl_curr.on, led_ctrl_curr.off);
@@ -1048,17 +1406,17 @@ static gboolean led_ctrl_step_cb(gpointer aptr)
   // adjust by brightness level
   int l = led_ctrl_curr.level;
 
-  r = led_ctrl_scale_value(r, l);
-  g = led_ctrl_scale_value(g, l);
-  b = led_ctrl_scale_value(b, l);
+  r = led_util_scale_value(r, l);
+  g = led_util_scale_value(g, l);
+  b = led_util_scale_value(b, l);
 
   // adjust by curve position
   size_t i = led_ctrl_breathe.step++;
   int    v = led_ctrl_breathe.value[i];
 
-  r = led_ctrl_scale_value(r, v);
-  g = led_ctrl_scale_value(g, v);
-  b = led_ctrl_scale_value(b, v);
+  r = led_util_scale_value(r, v);
+  g = led_util_scale_value(g, v);
+  b = led_util_scale_value(b, v);
 
   // set led color
   led_ctrl_set_rgb_value(r, g, b);
@@ -1178,6 +1536,10 @@ static void led_ctrl_wait_kernel(void)
   struct timespec ts = { 0, LED_CTRL_KERNEL_DELAY * 1000000l };
   TEMP_FAILURE_RETRY(nanosleep(&ts, &ts));
 }
+
+/* ------------------------------------------------------------------------- *
+ * hybris led API
+ * ------------------------------------------------------------------------- */
 
 /** Initialize libhybris indicator led device object
  *
