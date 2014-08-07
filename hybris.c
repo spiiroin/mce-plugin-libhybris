@@ -48,9 +48,6 @@
 #include <android/hardware/fb.h>
 #include <android/hardware/sensors.h>
 
-/** Helper to get number of elements in statically allocated array */
-#define numof(a) (sizeof(a)/sizeof*(a))
-
 static void mce_hybris_sensors_quit(void);
 
 static void mce_hybris_log(int lev, const char *file,
@@ -1023,7 +1020,7 @@ led_control_vanilla_probe(led_control_t *self)
   self->value  = led_control_vanilla_value_cb;
   self->close  = led_control_vanilla_close_cb;
 
-  for( size_t i = 0; i < numof(paths) ; ++i )
+  for( size_t i = 0; i < G_N_ELEMENTS(paths) ; ++i )
   {
     if( led_state_vanilla_probe(&state[0], &paths[i][0]) &&
         led_state_vanilla_probe(&state[1], &paths[i][1]) &&
@@ -1082,8 +1079,6 @@ led_control_hammerhead_close_cb(void *data)
   led_state_hammerhead_close(self + 2);
 }
 
-#define numof(a) (sizeof(a)/sizeof*(a))
-
 static bool
 led_control_hammerhead_probe(led_control_t *self)
 {
@@ -1129,7 +1124,7 @@ led_control_hammerhead_probe(led_control_t *self)
   self->value  = led_control_hammerhead_value_cb;
   self->close  = led_control_hammerhead_close_cb;
 
-  for( size_t i = 0; i < numof(paths) ; ++i )
+  for( size_t i = 0; i < G_N_ELEMENTS(paths) ; ++i )
   {
     if( led_state_hammerhead_probe(&state[0], &paths[i][0]) &&
         led_state_hammerhead_probe(&state[1], &paths[i][1]) &&
@@ -1938,7 +1933,7 @@ static void mce_hybris_sensors_thread(void *aptr)
      * guarantee that we ever return from the call, the thread is cancelled
      * asynchronously on cleanup - and any resources possibly reserved by
      * the dev_poll->poll() are lost. */
-    int n = dev_poll->poll(dev_poll, eve, numof(eve));
+    int n = dev_poll->poll(dev_poll, eve, G_N_ELEMENTS(eve));
 
     for( int i = 0; i < n; ++i ) {
       sensors_event_t *e = &eve[i];
