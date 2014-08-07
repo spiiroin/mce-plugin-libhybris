@@ -981,29 +981,29 @@ static bool
 led_control_vanilla_probe(led_control_t *self)
 {
 
-#define LED_PFIX_VANILLA "/sys/class/leds/led:rgb_"
+#define LED_PFIX_VANILLA "/sys/class/leds/"
 
   /** Sysfs control paths for RGB leds */
   static const led_paths_vanilla_t paths[][3] =
   {
     {
       {
-        .on  = LED_PFIX_VANILLA"red/blink_delay_on",
-        .off = LED_PFIX_VANILLA"red/blink_delay_off",
-        .val = LED_PFIX_VANILLA"red/brightness",
-        .max = LED_PFIX_VANILLA"red/max_brightness",
+        .on  = LED_PFIX_VANILLA"led:rgb_red/blink_delay_on",
+        .off = LED_PFIX_VANILLA"led:rgb_red/blink_delay_off",
+        .val = LED_PFIX_VANILLA"led:rgb_red/brightness",
+        .max = LED_PFIX_VANILLA"led:rgb_red/max_brightness",
       },
       {
-        .on  = LED_PFIX_VANILLA"green/blink_delay_on",
-        .off = LED_PFIX_VANILLA"green/blink_delay_off",
-        .val = LED_PFIX_VANILLA"green/brightness",
-        .max = LED_PFIX_VANILLA"green/max_brightness",
+        .on  = LED_PFIX_VANILLA"led:rgb_green/blink_delay_on",
+        .off = LED_PFIX_VANILLA"led:rgb_green/blink_delay_off",
+        .val = LED_PFIX_VANILLA"led:rgb_green/brightness",
+        .max = LED_PFIX_VANILLA"led:rgb_green/max_brightness",
       },
       {
-        .on  = LED_PFIX_VANILLA"blue/blink_delay_on",
-        .off = LED_PFIX_VANILLA"blue/blink_delay_off",
-        .val = LED_PFIX_VANILLA"blue/brightness",
-        .max = LED_PFIX_VANILLA"blue/max_brightness",
+        .on  = LED_PFIX_VANILLA"led:rgb_blue/blink_delay_on",
+        .off = LED_PFIX_VANILLA"led:rgb_blue/blink_delay_off",
+        .val = LED_PFIX_VANILLA"led:rgb_blue/brightness",
+        .max = LED_PFIX_VANILLA"led:rgb_blue/max_brightness",
       }
     },
   };
