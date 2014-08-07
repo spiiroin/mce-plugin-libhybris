@@ -950,28 +950,28 @@ led_control_probe(led_control_t *self)
 static void
 led_control_vanilla_blink_cb(void *data, int on_ms, int off_ms)
 {
-  const led_state_vanilla_t *self = data;
-  led_state_vanilla_set_blink(self + 0, on_ms, off_ms);
-  led_state_vanilla_set_blink(self + 1, on_ms, off_ms);
-  led_state_vanilla_set_blink(self + 2, on_ms, off_ms);
+  const led_state_vanilla_t *state = data;
+  led_state_vanilla_set_blink(state + 0, on_ms, off_ms);
+  led_state_vanilla_set_blink(state + 1, on_ms, off_ms);
+  led_state_vanilla_set_blink(state + 2, on_ms, off_ms);
 }
 
 static void
 led_control_vanilla_value_cb(void *data, int r, int g, int b)
 {
-  const led_state_vanilla_t *self = data;
-  led_state_vanilla_set_value(self + 0, r);
-  led_state_vanilla_set_value(self + 1, g);
-  led_state_vanilla_set_value(self + 2, b);
+  const led_state_vanilla_t *state = data;
+  led_state_vanilla_set_value(state + 0, r);
+  led_state_vanilla_set_value(state + 1, g);
+  led_state_vanilla_set_value(state + 2, b);
 }
 
 static void
 led_control_vanilla_close_cb(void *data)
 {
-  led_state_vanilla_t *self = data;
-  led_state_vanilla_close(self + 0);
-  led_state_vanilla_close(self + 1);
-  led_state_vanilla_close(self + 2);
+  led_state_vanilla_t *state = data;
+  led_state_vanilla_close(state + 0);
+  led_state_vanilla_close(state + 1);
+  led_state_vanilla_close(state + 2);
 }
 
 static bool
@@ -1046,37 +1046,37 @@ led_control_vanilla_probe(led_control_t *self)
 static void
 led_control_hammerhead_enable_cb(void *data, bool enable)
 {
-  const led_state_hammerhead_t *self = data;
-  led_state_hammerhead_set_enabled(self + 0, enable);
-  led_state_hammerhead_set_enabled(self + 1, enable);
-  led_state_hammerhead_set_enabled(self + 2, enable);
+  const led_state_hammerhead_t *state = data;
+  led_state_hammerhead_set_enabled(state + 0, enable);
+  led_state_hammerhead_set_enabled(state + 1, enable);
+  led_state_hammerhead_set_enabled(state + 2, enable);
 }
 
 static void
 led_control_hammerhead_blink_cb(void *data, int on_ms, int off_ms)
 {
-  const led_state_hammerhead_t *self = data;
-  led_state_hammerhead_set_blink(self + 0, on_ms, off_ms);
-  led_state_hammerhead_set_blink(self + 1, on_ms, off_ms);
-  led_state_hammerhead_set_blink(self + 2, on_ms, off_ms);
+  const led_state_hammerhead_t *state = data;
+  led_state_hammerhead_set_blink(state + 0, on_ms, off_ms);
+  led_state_hammerhead_set_blink(state + 1, on_ms, off_ms);
+  led_state_hammerhead_set_blink(state + 2, on_ms, off_ms);
 }
 
 static void
 led_control_hammerhead_value_cb(void *data, int r, int g, int b)
 {
-  const led_state_hammerhead_t *self = data;
-  led_state_hammerhead_set_value(self + 0, r);
-  led_state_hammerhead_set_value(self + 1, g);
-  led_state_hammerhead_set_value(self + 2, b);
+  const led_state_hammerhead_t *state = data;
+  led_state_hammerhead_set_value(state + 0, r);
+  led_state_hammerhead_set_value(state + 1, g);
+  led_state_hammerhead_set_value(state + 2, b);
 }
 
 static void
 led_control_hammerhead_close_cb(void *data)
 {
-  led_state_hammerhead_t *self = data;
-  led_state_hammerhead_close(self + 0);
-  led_state_hammerhead_close(self + 1);
-  led_state_hammerhead_close(self + 2);
+  led_state_hammerhead_t *state = data;
+  led_state_hammerhead_close(state + 0);
+  led_state_hammerhead_close(state + 1);
+  led_state_hammerhead_close(state + 2);
 }
 
 static bool
