@@ -602,7 +602,7 @@ cleanup:
  */
 static void led_util_close_file(int *fd_ptr)
 {
-  if( *fd_ptr != -1 )
+  if( fd_ptr && *fd_ptr != -1 )
   {
     close(*fd_ptr), *fd_ptr = -1;
   }
@@ -612,9 +612,22 @@ static void led_util_close_file(int *fd_ptr)
  */
 static bool led_util_open_file(int *fd_ptr, const char *path)
 {
-  led_util_close_file(fd_ptr);
-  *fd_ptr = open(path, O_WRONLY|O_APPEND);
-  return *fd_ptr != -1;
+  bool res = false;
+
+  if( fd_ptr && path )
+  {
+    led_util_close_file(fd_ptr);
+    if( (*fd_ptr = open(path, O_WRONLY|O_APPEND)) != -1 )
+    {
+      res = true;
+    }
+    else if( errno != ENOENT )
+    {
+      mce_log(LOG_WARNING, "%s: %s: %m", path, "open");
+    }
+  }
+
+  return res;
 }
 
 /** Scale value from 0...255 to 0...max range
