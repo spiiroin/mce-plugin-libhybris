@@ -87,8 +87,14 @@ LDLIBS   += $(PKG_LDLIBS)
 # Implicit rules
 # ----------------------------------------------------------------------------
 
-%.so : %.o
+.SUFFIXES: %.pic.o
+.PRECIOUS: %.pic.o
+
+%.so : %.pic.o
 	$(CC) -o $@ -shared $^ $(LDFLAGS) $(LDLIBS)
+
+%.pic.o : %.c
+	$(CC) -c -o $@ $< -fPIC $(CPPFLAGS) $(CFLAGS)
 
 %.q : %.c
 	$(CC) -E -o $@ $<
@@ -102,7 +108,7 @@ LDLIBS   += $(PKG_LDLIBS)
 # ----------------------------------------------------------------------------
 
 hybris.so : LDLIBS += -lhardware -lm
-hybris.so : hybris.o
+hybris.so : hybris.pic.o
 
 install:: hybris.so
 	install -d -m755 $(DESTDIR)$(_LIBDIR)/mce/modules
