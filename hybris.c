@@ -833,11 +833,11 @@ struct led_control_t
 {
   const char *name;
   void       *data;
+  bool        can_breathe;
   void      (*enable)(void *data, bool enable);
   void      (*blink)(void *data, int on_ms, int off_ms);
   void      (*value)(void *data, int r, int g, int b);
   void      (*close)(void *data);
-
 };
 
 static bool led_control_vanilla_probe(led_control_t *self);
@@ -910,6 +910,9 @@ led_control_init(led_control_t *self)
   self->blink  = 0;
   self->value  = 0;
   self->close  = 0;
+
+  /* Assume that it is exceptional if sw breathing can't be supported */
+  self->can_breathe = true;
 }
 
 /** Set RGB LED enabled/disable
@@ -941,6 +944,16 @@ led_control_probe(led_control_t *self)
 
   return (led_control_vanilla_probe(self) ||
           led_control_hammerhead_probe(self));
+}
+
+/** Query if backend can support sw breathing
+ *
+ * @return true if breathing can be enabled, false otherwise
+ */
+static bool
+led_control_can_breathe(const led_control_t *self)
+{
+  return self->can_breathe;
 }
 
 /* ------------------------------------------------------------------------- *
@@ -1123,6 +1136,10 @@ led_control_hammerhead_probe(led_control_t *self)
   self->blink  = led_control_hammerhead_blink_cb;
   self->value  = led_control_hammerhead_value_cb;
   self->close  = led_control_hammerhead_close_cb;
+
+  /* Changing led parameters is so slow and consumes so much
+   * cpu cycles that we just can't have breathing available */
+  self->can_breathe = false;
 
   for( size_t i = 0; i < G_N_ELEMENTS(paths) ; ++i )
   {
@@ -1738,14 +1755,37 @@ cleanup:
   return ack;
 }
 
+/** Query if currently active led backend can support breathing
+ *
+ * @return true if breathing can be requested, false otherwise
+ */
+bool
+mce_hybris_indicator_can_breathe(void)
+{
+  if( !led_ctrl_uses_sysfs ) {
+    /* We can't know how access via hybris behaves, so
+     * err on the safe side and assume that breathing is not ok */
+    return false;
+  }
+
+  return led_control_can_breathe(&led_control);
+}
+
 /** Enable/disable sw breathing
  *
  * @param enable true to enable sw breathing, false to disable
  */
 void mce_hybris_indicator_enable_breathing(bool enable)
 {
-  if( !led_ctrl_uses_sysfs ) {
-    // no breathing control via hybris api
+  if( !mce_hybris_indicator_can_breathe() ) {
+    if( enable ) {
+      static bool once = false;
+      if( !once ) {
+        once = true;
+        mce_log(LOG_ERR, "sw breathing was requested even"
+                " though it can't be supported");
+      }
+    }
     goto cleanup;
   }
 
