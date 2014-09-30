@@ -654,6 +654,10 @@ typedef struct
   int fd_val;
   int fd_on;
   int fd_off;
+
+  int cur_val;
+  int cur_on;
+  int cur_off;
 } led_state_vanilla_t;
 
 static void
@@ -663,6 +667,10 @@ led_state_vanilla_init(led_state_vanilla_t *self)
   self->fd_off = -1;
   self->fd_val = -1;
   self->maxval = -1;
+
+  self->cur_val = -1;
+  self->cur_on  = -1;
+  self->cur_off = -1;
 }
 
 static void
@@ -703,21 +711,40 @@ cleanup:
 }
 
 static void
-led_state_vanilla_set_value(const led_state_vanilla_t *self,
+led_state_vanilla_set_value(led_state_vanilla_t *self,
                             int value)
 {
   if( self->fd_val != -1 )
   {
-    dprintf(self->fd_val, "%d", led_util_scale_value(value, self->maxval));
+    value = led_util_scale_value(value, self->maxval);
+    if( self->cur_val != value )
+    {
+      self->cur_val = value;
+      dprintf(self->fd_val, "%d", value);
+    }
   }
 }
 static void
-led_state_vanilla_set_blink(const led_state_vanilla_t *self,
+led_state_vanilla_set_blink(led_state_vanilla_t *self,
                             int on_ms, int off_ms)
 {
-  if( self->fd_on != -1 && self->fd_off != -1 )
+  /* Note: Blinking config is taken in use when brightness
+   *       sysfs is written to -> we need to invalidate
+   *       cached brightness value if blinking changes
+   *       are made.
+   */
+
+  if( self->fd_on != -1 && self->cur_on != on_ms )
   {
+    self->cur_on  = on_ms;
+    self->cur_val = -1;
     dprintf(self->fd_on,  "%d", on_ms);
+  }
+
+  if( self->fd_on != -1 && self->cur_off != off_ms )
+  {
+    self->cur_off = off_ms;
+    self->cur_val = -1;
     dprintf(self->fd_off, "%d", off_ms);
   }
 }
@@ -818,7 +845,9 @@ led_state_hammerhead_set_blink(const led_state_hammerhead_t *self,
     int len = snprintf(tmp, sizeof tmp, "%d %d", on_ms, off_ms);
     if( len > 0 && len <= (int)sizeof tmp )
     {
-      write(self->fd_on_off, tmp, len);
+      if( write(self->fd_on_off, tmp, len) < 0 ) {
+        // dontcare, keep compiler from complaining too
+      }
     }
   }
 }
@@ -963,7 +992,7 @@ led_control_can_breathe(const led_control_t *self)
 static void
 led_control_vanilla_blink_cb(void *data, int on_ms, int off_ms)
 {
-  const led_state_vanilla_t *state = data;
+  led_state_vanilla_t *state = data;
   led_state_vanilla_set_blink(state + 0, on_ms, off_ms);
   led_state_vanilla_set_blink(state + 1, on_ms, off_ms);
   led_state_vanilla_set_blink(state + 2, on_ms, off_ms);
@@ -972,7 +1001,7 @@ led_control_vanilla_blink_cb(void *data, int on_ms, int off_ms)
 static void
 led_control_vanilla_value_cb(void *data, int r, int g, int b)
 {
-  const led_state_vanilla_t *state = data;
+  led_state_vanilla_t *state = data;
   led_state_vanilla_set_value(state + 0, r);
   led_state_vanilla_set_value(state + 1, g);
   led_state_vanilla_set_value(state + 2, b);
@@ -1168,13 +1197,13 @@ led_control_hammerhead_probe(led_control_t *self)
 #define LED_CTRL_KERNEL_DELAY 10 // [ms]
 
 /** Minimum delay between breathing steps */
-#define LED_CTRL_BREATHING_DELAY 20 // [ms]
+#define LED_CTRL_BREATHING_DELAY 50 // [ms]
 
 /** Maximum number of breathing steps; rise and fall time combined */
 #define LED_CTRL_MAX_STEPS 256
 
 /** Minimum number of breathing steps on rise/fall time */
-#define LED_CTRL_MIN_STEPS 7
+#define LED_CTRL_MIN_STEPS 5
 
 /** Led request parameters */
 typedef struct
