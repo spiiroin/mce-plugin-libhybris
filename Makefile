@@ -39,13 +39,13 @@ mostlyclean::
 
 CPPFLAGS += -D_GNU_SOURCE
 CPPFLAGS += -D_FILE_OFFSET_BITS=64
+CPPFLAGS += -D_THREAD_SAFE
 
 COMMON   += -Wall
 COMMON   += -W
 COMMON   += -Wmissing-prototypes
 COMMON   += -Os
 COMMON   += -g
-COMMON   += -pthreads
 
 CFLAGS   += $(COMMON)
 CFLAGS   += -std=c99
@@ -53,9 +53,9 @@ CFLAGS   += -std=c99
 CXXFLAGS += $(COMMON)
 
 LDFLAGS  += -g
-LDFLAGS  += -pthreads
 
 LDLIBS   += -Wl,--as-needed
+LDLIBS   += -lpthread
 
 # ----------------------------------------------------------------------------
 # Flags from pkg-config
