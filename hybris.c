@@ -853,6 +853,86 @@ led_state_hammerhead_set_blink(const led_state_hammerhead_t *self,
 }
 
 /* ------------------------------------------------------------------------- *
+ * htcvision sysfs controls for one channel in amber/green led
+ * ------------------------------------------------------------------------- */
+
+typedef struct
+{
+  const char *max;    // R
+  const char *val;    // W
+  const char *blink;  // W
+} led_paths_htcvision_t;
+
+typedef struct
+{
+  int maxval;
+  int fd_val;
+  int fd_blink;
+} led_state_htcvision_t;
+
+static void
+led_state_htcvision_init(led_state_htcvision_t *self)
+{
+  self->maxval   = -1;
+  self->fd_val   = -1;
+  self->fd_blink = -1;
+}
+
+static void
+led_state_htcvision_close(led_state_htcvision_t *self)
+{
+  led_util_close_file(&self->fd_val);
+  led_util_close_file(&self->fd_blink);
+}
+
+static bool
+led_state_htcvision_probe(led_state_htcvision_t *self,
+                          const led_paths_htcvision_t *path)
+{
+  bool res = false;
+
+  led_state_htcvision_close(self);
+
+  if( (self->maxval = led_util_read_number(path->max)) <= 0 )
+  {
+    goto cleanup;
+  }
+
+  if( !led_util_open_file(&self->fd_val,   path->val)  ||
+      !led_util_open_file(&self->fd_blink, path->blink) )
+  {
+    goto cleanup;
+  }
+
+  res = true;
+
+cleanup:
+
+  if( !res ) led_state_htcvision_close(self);
+
+  return res;
+}
+
+static void
+led_state_htcvision_set_value(const led_state_htcvision_t *self,
+                              int value)
+{
+  if( self->fd_val != -1 )
+  {
+    dprintf(self->fd_val, "%d", led_util_scale_value(value, self->maxval));
+  }
+}
+
+static void
+led_state_htcvision_set_blink(const led_state_htcvision_t *self, int blink)
+{
+  if( self->fd_blink != -1 )
+  {
+    dprintf(self->fd_val, "%d", blink);
+  }
+}
+
+/* ------------------------------------------------------------------------- *
  * RGB led control: generic frontend
  * ------------------------------------------------------------------------- */
 
@@ -871,6 +951,7 @@ struct led_control_t
 
 static bool led_control_vanilla_probe(led_control_t *self);
 static bool led_control_hammerhead_probe(led_control_t *self);
+static bool led_control_htcvision_probe(led_control_t *self);
 
 /** Set RGB LED enabled/disable
  *
@@ -969,10 +1050,21 @@ led_control_close(led_control_t *self)
 static bool
 led_control_probe(led_control_t *self)
 {
-  led_control_init(self);
+  typedef bool (*led_control_probe_fn)(led_control_t *);
 
-  return (led_control_vanilla_probe(self) ||
-          led_control_hammerhead_probe(self));
+  static const led_control_probe_fn lut[] =
+  {
+    led_control_vanilla_probe,
+    led_control_hammerhead_probe,
+    led_control_htcvision_probe,
+  };
+
+  for( size_t i = 0; i < G_N_ELEMENTS(lut); ++i )
+  {
+    if( lut[i](self) ) return true;
+  }
+
+  return false;
 }
 
 /** Query if backend can support sw breathing
@@ -1175,6 +1267,127 @@ led_control_hammerhead_probe(led_control_t *self)
     if( led_state_hammerhead_probe(&state[0], &paths[i][0]) &&
         led_state_hammerhead_probe(&state[1], &paths[i][1]) &&
         led_state_hammerhead_probe(&state[2], &paths[i][2]) )
+    {
+      res = true;
+      break;
+    }
+  }
+
+  if( !res )
+  {
+    led_control_close(self);
+  }
+
+  return res;
+}
+
+/* ------------------------------------------------------------------------- *
+ * RGB led control: htcvision backend
+ * ------------------------------------------------------------------------- */
+
+static void
+led_control_htcvision_map_color(int r, int g, int b,
+                                int *amber, int *green)
+{
+  /* Only "amber" or "green" color can be used.
+   *
+   * Assume amber = r:ff g:7f b:00
+   *        green = r:00 g:ff b:00
+   *
+   * Try to choose the one with smaller delta to the
+   * requested rgb color by using the 'r':'g' ratio.
+   *
+   * The 'b' is used for intensity preservation only.
+   */
+
+  if( r * 3 < g * 4)
+  {
+    *amber = 0;
+    *green = (g > b) ? g : b;
+  }
+  else
+  {
+    *amber = (r > b) ? r : b;
+    *green = 0;
+  }
+}
+
+static void
+led_control_htcvision_blink_cb(void *data, int on_ms, int off_ms)
+{
+  const led_state_htcvision_t *state = data;
+
+  int blink = (on_ms && off_ms);
+
+  led_state_htcvision_set_blink(state + 0, blink);
+  led_state_htcvision_set_blink(state + 1, blink);
+}
+
+static void
+led_control_htcvision_value_cb(void *data, int r, int g, int b)
+{
+  const led_state_htcvision_t *state = data;
+
+  int amber = 0;
+  int green = 0;
+  led_control_htcvision_map_color(r, g, b, &amber, &green);
+
+  led_state_htcvision_set_value(state + 0, amber);
+  led_state_htcvision_set_value(state + 1, green);
+}
+
+static void
+led_control_htcvision_close_cb(void *data)
+{
+  led_state_htcvision_t *state = data;
+  led_state_htcvision_close(state + 0);
+  led_state_htcvision_close(state + 1);
+}
+
+static bool
+led_control_htcvision_probe(led_control_t *self)
+{
+#define LED_PFIX_HTCVISION "/sys/class/leds/"
+
+  /** Sysfs control paths for RGB leds */
+  static const led_paths_htcvision_t paths[][3] =
+  {
+    // htc vision, htc ace
+    {
+      {
+        .max   = LED_PFIX_HTCVISION"amber/max_brightness",
+        .val   = LED_PFIX_HTCVISION"amber/brightness",
+        .blink = LED_PFIX_HTCVISION"amber/blink",
+      },
+      {
+        .max   = LED_PFIX_HTCVISION"green/max_brightness",
+        .val   = LED_PFIX_HTCVISION"green/brightness",
+        .blink = LED_PFIX_HTCVISION"green/blink",
+      },
+    },
+  };
+
+  static led_state_htcvision_t state[2];
+
+  bool res = false;
+
+  led_state_htcvision_init(state+0);
+  led_state_htcvision_init(state+1);
+
+  self->name   = "htcvision";
+  self->data   = state;
+  self->enable = 0;
+  self->blink  = led_control_htcvision_blink_cb;
+  self->value  = led_control_htcvision_value_cb;
+  self->close  = led_control_htcvision_close_cb;
+
+  /* TODO: check if breathing can be left enabled */
+  self->can_breathe = true;
+
+  for( size_t i = 0; i < G_N_ELEMENTS(paths) ; ++i )
+  {
+    if( led_state_htcvision_probe(&state[0], &paths[i][0]) &&
+        led_state_htcvision_probe(&state[1], &paths[i][1]) )
     {
       res = true;
       break;
