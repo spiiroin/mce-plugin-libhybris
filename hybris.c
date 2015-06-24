@@ -642,10 +642,11 @@ static int led_util_scale_value(int in, int max)
 
 typedef struct
 {
-  const char *max; // R
-  const char *val; // W
-  const char *on;  // W
-  const char *off; // W
+  const char *max;   // R
+  const char *val;   // W
+  const char *on;    // W
+  const char *off;   // W
+  const char *blink; // W
 } led_paths_vanilla_t;
 
 typedef struct
@@ -654,23 +655,28 @@ typedef struct
   int fd_val;
   int fd_on;
   int fd_off;
+  int fd_blink;
 
   int cur_val;
   int cur_on;
   int cur_off;
+  int cur_blink;
+
 } led_state_vanilla_t;
 
 static void
 led_state_vanilla_init(led_state_vanilla_t *self)
 {
-  self->fd_on  = -1;
-  self->fd_off = -1;
-  self->fd_val = -1;
-  self->maxval = -1;
+  self->fd_on     = -1;
+  self->fd_off    = -1;
+  self->fd_val    = -1;
+  self->fd_blink  = -1;
+  self->maxval    = -1;
 
-  self->cur_val = -1;
-  self->cur_on  = -1;
-  self->cur_off = -1;
+  self->cur_val   = -1;
+  self->cur_on    = -1;
+  self->cur_off   = -1;
+  self->cur_blink = -1;
 }
 
 static void
@@ -679,6 +685,7 @@ led_state_vanilla_close(led_state_vanilla_t *self)
   led_util_close_file(&self->fd_on);
   led_util_close_file(&self->fd_off);
   led_util_close_file(&self->fd_val);
+  led_util_close_file(&self->fd_blink);
 }
 
 static bool
@@ -701,6 +708,9 @@ led_state_vanilla_probe(led_state_vanilla_t *self,
     goto cleanup;
   }
 
+  // having "blink" control file is optional
+  led_util_open_file(&self->fd_blink, path->blink);
+
   res = true;
 
 cleanup:
@@ -719,8 +729,19 @@ led_state_vanilla_set_value(led_state_vanilla_t *self,
     value = led_util_scale_value(value, self->maxval);
     if( self->cur_val != value )
     {
-      self->cur_val = value;
+      self->cur_val   = value;
+      self->cur_blink = -1;
       dprintf(self->fd_val, "%d", value);
+    }
+  }
+
+  if( self->fd_blink != -1 )
+  {
+    int blink = (self->cur_on > 0 && self->cur_off > 0);
+    if( self->cur_blink != blink )
+    {
+      self->cur_blink = blink;
+      dprintf(self->fd_blink, "%d", blink);
     }
   }
 }
@@ -736,15 +757,17 @@ led_state_vanilla_set_blink(led_state_vanilla_t *self,
 
   if( self->fd_on != -1 && self->cur_on != on_ms )
   {
-    self->cur_on  = on_ms;
-    self->cur_val = -1;
+    self->cur_on    = on_ms;
+    self->cur_val   = -1;
+    self->cur_blink = -1;
     dprintf(self->fd_on,  "%d", on_ms);
   }
 
   if( self->fd_on != -1 && self->cur_off != off_ms )
   {
-    self->cur_off = off_ms;
-    self->cur_val = -1;
+    self->cur_off   = off_ms;
+    self->cur_val   = -1;
+    self->cur_blink = -1;
     dprintf(self->fd_off, "%d", off_ms);
   }
 }
@@ -1111,12 +1134,13 @@ led_control_vanilla_close_cb(void *data)
 static bool
 led_control_vanilla_probe(led_control_t *self)
 {
-
 #define LED_PFIX_VANILLA "/sys/class/leds/"
+#define LED_PFIX_I9300   "/sys/class/leds/"
 
   /** Sysfs control paths for RGB leds */
   static const led_paths_vanilla_t paths[][3] =
   {
+    // vanilla
     {
       {
         .on  = LED_PFIX_VANILLA"led:rgb_red/blink_delay_on",
@@ -1135,6 +1159,30 @@ led_control_vanilla_probe(led_control_t *self)
         .off = LED_PFIX_VANILLA"led:rgb_blue/blink_delay_off",
         .val = LED_PFIX_VANILLA"led:rgb_blue/brightness",
         .max = LED_PFIX_VANILLA"led:rgb_blue/max_brightness",
+      }
+    },
+    // i9300 (galaxy s3 international)
+    {
+      {
+        .on    = LED_PFIX_I9300"led_r/delay_on",
+        .off   = LED_PFIX_I9300"led_r/delay_off",
+        .val   = LED_PFIX_I9300"led_r/brightness",
+        .max   = LED_PFIX_I9300"led_r/max_brightness",
+        .blink = LED_PFIX_I9300"led_r/blink",
+      },
+      {
+        .on    = LED_PFIX_I9300"led_g/delay_on",
+        .off   = LED_PFIX_I9300"led_g/delay_off",
+        .val   = LED_PFIX_I9300"led_g/brightness",
+        .max   = LED_PFIX_I9300"led_g/max_brightness",
+        .blink = LED_PFIX_I9300"led_g/blink",
+      },
+      {
+        .on    = LED_PFIX_I9300"led_b/delay_on",
+        .off   = LED_PFIX_I9300"led_b/delay_off",
+        .val   = LED_PFIX_I9300"led_b/brightness",
+        .max   = LED_PFIX_I9300"led_b/max_brightness",
+        .blink = LED_PFIX_I9300"led_b/blink",
       }
     },
   };
