@@ -763,7 +763,7 @@ led_state_vanilla_set_blink(led_state_vanilla_t *self,
     dprintf(self->fd_on,  "%d", on_ms);
   }
 
-  if( self->fd_on != -1 && self->cur_off != off_ms )
+  if( self->fd_off != -1 && self->cur_off != off_ms )
   {
     self->cur_off   = off_ms;
     self->cur_val   = -1;
