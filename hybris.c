@@ -1901,6 +1901,9 @@ bool mce_hybris_indicator_init(void)
   ack = true;
 
 cleanup:
+
+  mce_log(LOG_DEBUG, "res = %s", ack ? "true" : "false");
+
   return ack;
 }
 
@@ -2052,13 +2055,30 @@ cleanup:
 bool
 mce_hybris_indicator_can_breathe(void)
 {
-  if( !led_ctrl_uses_sysfs ) {
-    /* We can't know how access via hybris behaves, so
-     * err on the safe side and assume that breathing is not ok */
-    return false;
+  bool ack = false;
+
+  /* Note: We can't know how access via hybris behaves, so err
+   *       on the safe side and assume that breathing is not ok
+   *       unless we have direct sysfs controls.
+   */
+
+  if( led_ctrl_uses_sysfs )
+  {
+    ack = led_control_can_breathe(&led_control);
   }
 
-  return led_control_can_breathe(&led_control);
+  /* The result does not change during runtime of mce, so
+   * log only once */
+
+  static bool logged = false;
+
+  if( !logged )
+  {
+    logged = true;
+    mce_log(LOG_DEBUG, "res = %s", ack ? "true" : "false");
+  }
+
+  return ack;
 }
 
 /** Enable/disable sw breathing
@@ -2067,6 +2087,8 @@ mce_hybris_indicator_can_breathe(void)
  */
 void mce_hybris_indicator_enable_breathing(bool enable)
 {
+  mce_log(LOG_DEBUG, "enable = %s", enable ? "true" : "false");
+
   if( !mce_hybris_indicator_can_breathe() ) {
     if( enable ) {
       static bool once = false;
@@ -2096,6 +2118,8 @@ cleanup:
  */
 bool mce_hybris_indicator_set_brightness(int level)
 {
+  mce_log(LOG_DEBUG, "level = %d", level);
+
   if( !led_ctrl_uses_sysfs ) {
     // no breathing control via hybris api
     goto cleanup;
