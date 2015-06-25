@@ -611,9 +611,10 @@ static bool led_util_open_file(int *fd_ptr, const char *path)
 {
   bool res = false;
 
+  led_util_close_file(fd_ptr);
+
   if( fd_ptr && path )
   {
-    led_util_close_file(fd_ptr);
     if( (*fd_ptr = open(path, O_WRONLY|O_APPEND)) != -1 )
     {
       res = true;
@@ -647,6 +648,7 @@ typedef struct
   const char *on;    // W
   const char *off;   // W
   const char *blink; // W
+  int         maxval;// value to use if max path is NULL
 } led_paths_vanilla_t;
 
 typedef struct
@@ -696,16 +698,35 @@ led_state_vanilla_probe(led_state_vanilla_t *self,
 
   led_state_vanilla_close(self);
 
-  if( (self->maxval = led_util_read_number(path->max)) <= 0 )
+  // maximum brightness can be read from file or given in config
+  if( path->max )
+  {
+    self->maxval = led_util_read_number(path->max);
+  }
+  else
+  {
+    self->maxval = path->maxval;
+  }
+
+  if( self->maxval <= 0 )
   {
     goto cleanup;
   }
 
-  if( !led_util_open_file(&self->fd_val, path->val) ||
-      !led_util_open_file(&self->fd_on,  path->on)  ||
-      !led_util_open_file(&self->fd_off, path->off) )
+  // we always must have brightness control
+  if( !led_util_open_file(&self->fd_val, path->val) )
   {
     goto cleanup;
+  }
+
+  // on/off period controls are optional, but both
+  // are needed if one is present
+  if( led_util_open_file(&self->fd_on, path->on) )
+  {
+    if( !led_util_open_file(&self->fd_off, path->off) )
+    {
+      led_util_close_file(&self->fd_on);
+    }
   }
 
   // having "blink" control file is optional
@@ -1185,6 +1206,21 @@ led_control_vanilla_probe(led_control_t *self)
         .blink = LED_PFIX_I9300"led_b/blink",
       }
     },
+    // yuga (sony xperia z)
+    {
+      {
+        .val    = "/sys/class/leds/lm3533-red/brightness",
+        .maxval = 255,
+      },
+      {
+        .val    = "/sys/class/leds/lm3533-green/brightness",
+        .maxval = 255,
+      },
+      {
+        .val    = "/sys/class/leds/lm3533-blue/brightness",
+        .maxval = 255,
+      },
+    },
   };
 
   static led_state_vanilla_t state[3];
@@ -1606,6 +1642,8 @@ static void led_ctrl_close_sysfs_files(void)
  */
 static bool led_ctrl_probe_sysfs_files(void)
 {
+  led_control_init(&led_control);
+
   bool probed = led_control_probe(&led_control);
 
   mce_log(LOG_DEBUG, "led sysfs backend: %s",
