@@ -611,9 +611,10 @@ static bool led_util_open_file(int *fd_ptr, const char *path)
 {
   bool res = false;
 
+  led_util_close_file(fd_ptr);
+
   if( fd_ptr && path )
   {
-    led_util_close_file(fd_ptr);
     if( (*fd_ptr = open(path, O_WRONLY|O_APPEND)) != -1 )
     {
       res = true;
@@ -642,10 +643,12 @@ static int led_util_scale_value(int in, int max)
 
 typedef struct
 {
-  const char *max; // R
-  const char *val; // W
-  const char *on;  // W
-  const char *off; // W
+  const char *max;   // R
+  const char *val;   // W
+  const char *on;    // W
+  const char *off;   // W
+  const char *blink; // W
+  int         maxval;// value to use if max path is NULL
 } led_paths_vanilla_t;
 
 typedef struct
@@ -654,23 +657,28 @@ typedef struct
   int fd_val;
   int fd_on;
   int fd_off;
+  int fd_blink;
 
   int cur_val;
   int cur_on;
   int cur_off;
+  int cur_blink;
+
 } led_state_vanilla_t;
 
 static void
 led_state_vanilla_init(led_state_vanilla_t *self)
 {
-  self->fd_on  = -1;
-  self->fd_off = -1;
-  self->fd_val = -1;
-  self->maxval = -1;
+  self->fd_on     = -1;
+  self->fd_off    = -1;
+  self->fd_val    = -1;
+  self->fd_blink  = -1;
+  self->maxval    = -1;
 
-  self->cur_val = -1;
-  self->cur_on  = -1;
-  self->cur_off = -1;
+  self->cur_val   = -1;
+  self->cur_on    = -1;
+  self->cur_off   = -1;
+  self->cur_blink = -1;
 }
 
 static void
@@ -679,6 +687,7 @@ led_state_vanilla_close(led_state_vanilla_t *self)
   led_util_close_file(&self->fd_on);
   led_util_close_file(&self->fd_off);
   led_util_close_file(&self->fd_val);
+  led_util_close_file(&self->fd_blink);
 }
 
 static bool
@@ -689,17 +698,39 @@ led_state_vanilla_probe(led_state_vanilla_t *self,
 
   led_state_vanilla_close(self);
 
-  if( (self->maxval = led_util_read_number(path->max)) <= 0 )
+  // maximum brightness can be read from file or given in config
+  if( path->max )
+  {
+    self->maxval = led_util_read_number(path->max);
+  }
+  else
+  {
+    self->maxval = path->maxval;
+  }
+
+  if( self->maxval <= 0 )
   {
     goto cleanup;
   }
 
-  if( !led_util_open_file(&self->fd_val, path->val) ||
-      !led_util_open_file(&self->fd_on,  path->on)  ||
-      !led_util_open_file(&self->fd_off, path->off) )
+  // we always must have brightness control
+  if( !led_util_open_file(&self->fd_val, path->val) )
   {
     goto cleanup;
   }
+
+  // on/off period controls are optional, but both
+  // are needed if one is present
+  if( led_util_open_file(&self->fd_on, path->on) )
+  {
+    if( !led_util_open_file(&self->fd_off, path->off) )
+    {
+      led_util_close_file(&self->fd_on);
+    }
+  }
+
+  // having "blink" control file is optional
+  led_util_open_file(&self->fd_blink, path->blink);
 
   res = true;
 
@@ -719,8 +750,19 @@ led_state_vanilla_set_value(led_state_vanilla_t *self,
     value = led_util_scale_value(value, self->maxval);
     if( self->cur_val != value )
     {
-      self->cur_val = value;
+      self->cur_val   = value;
+      self->cur_blink = -1;
       dprintf(self->fd_val, "%d", value);
+    }
+  }
+
+  if( self->fd_blink != -1 )
+  {
+    int blink = (self->cur_on > 0 && self->cur_off > 0);
+    if( self->cur_blink != blink )
+    {
+      self->cur_blink = blink;
+      dprintf(self->fd_blink, "%d", blink);
     }
   }
 }
@@ -736,15 +778,17 @@ led_state_vanilla_set_blink(led_state_vanilla_t *self,
 
   if( self->fd_on != -1 && self->cur_on != on_ms )
   {
-    self->cur_on  = on_ms;
-    self->cur_val = -1;
+    self->cur_on    = on_ms;
+    self->cur_val   = -1;
+    self->cur_blink = -1;
     dprintf(self->fd_on,  "%d", on_ms);
   }
 
-  if( self->fd_on != -1 && self->cur_off != off_ms )
+  if( self->fd_off != -1 && self->cur_off != off_ms )
   {
-    self->cur_off = off_ms;
-    self->cur_val = -1;
+    self->cur_off   = off_ms;
+    self->cur_val   = -1;
+    self->cur_blink = -1;
     dprintf(self->fd_off, "%d", off_ms);
   }
 }
@@ -853,6 +897,86 @@ led_state_hammerhead_set_blink(const led_state_hammerhead_t *self,
 }
 
 /* ------------------------------------------------------------------------- *
+ * htcvision sysfs controls for one channel in amber/green led
+ * ------------------------------------------------------------------------- */
+
+typedef struct
+{
+  const char *max;    // R
+  const char *val;    // W
+  const char *blink;  // W
+} led_paths_htcvision_t;
+
+typedef struct
+{
+  int maxval;
+  int fd_val;
+  int fd_blink;
+} led_state_htcvision_t;
+
+static void
+led_state_htcvision_init(led_state_htcvision_t *self)
+{
+  self->maxval   = -1;
+  self->fd_val   = -1;
+  self->fd_blink = -1;
+}
+
+static void
+led_state_htcvision_close(led_state_htcvision_t *self)
+{
+  led_util_close_file(&self->fd_val);
+  led_util_close_file(&self->fd_blink);
+}
+
+static bool
+led_state_htcvision_probe(led_state_htcvision_t *self,
+                          const led_paths_htcvision_t *path)
+{
+  bool res = false;
+
+  led_state_htcvision_close(self);
+
+  if( (self->maxval = led_util_read_number(path->max)) <= 0 )
+  {
+    goto cleanup;
+  }
+
+  if( !led_util_open_file(&self->fd_val,   path->val)  ||
+      !led_util_open_file(&self->fd_blink, path->blink) )
+  {
+    goto cleanup;
+  }
+
+  res = true;
+
+cleanup:
+
+  if( !res ) led_state_htcvision_close(self);
+
+  return res;
+}
+
+static void
+led_state_htcvision_set_value(const led_state_htcvision_t *self,
+                              int value)
+{
+  if( self->fd_val != -1 )
+  {
+    dprintf(self->fd_val, "%d", led_util_scale_value(value, self->maxval));
+  }
+}
+
+static void
+led_state_htcvision_set_blink(const led_state_htcvision_t *self, int blink)
+{
+  if( self->fd_blink != -1 )
+  {
+    dprintf(self->fd_val, "%d", blink);
+  }
+}
+
+/* ------------------------------------------------------------------------- *
  * RGB led control: generic frontend
  * ------------------------------------------------------------------------- */
 
@@ -871,6 +995,7 @@ struct led_control_t
 
 static bool led_control_vanilla_probe(led_control_t *self);
 static bool led_control_hammerhead_probe(led_control_t *self);
+static bool led_control_htcvision_probe(led_control_t *self);
 
 /** Set RGB LED enabled/disable
  *
@@ -969,10 +1094,21 @@ led_control_close(led_control_t *self)
 static bool
 led_control_probe(led_control_t *self)
 {
-  led_control_init(self);
+  typedef bool (*led_control_probe_fn)(led_control_t *);
 
-  return (led_control_vanilla_probe(self) ||
-          led_control_hammerhead_probe(self));
+  static const led_control_probe_fn lut[] =
+  {
+    led_control_vanilla_probe,
+    led_control_hammerhead_probe,
+    led_control_htcvision_probe,
+  };
+
+  for( size_t i = 0; i < G_N_ELEMENTS(lut); ++i )
+  {
+    if( lut[i](self) ) return true;
+  }
+
+  return false;
 }
 
 /** Query if backend can support sw breathing
@@ -1019,12 +1155,13 @@ led_control_vanilla_close_cb(void *data)
 static bool
 led_control_vanilla_probe(led_control_t *self)
 {
-
 #define LED_PFIX_VANILLA "/sys/class/leds/"
+#define LED_PFIX_I9300   "/sys/class/leds/"
 
   /** Sysfs control paths for RGB leds */
   static const led_paths_vanilla_t paths[][3] =
   {
+    // vanilla
     {
       {
         .on  = LED_PFIX_VANILLA"led:rgb_red/blink_delay_on",
@@ -1044,6 +1181,45 @@ led_control_vanilla_probe(led_control_t *self)
         .val = LED_PFIX_VANILLA"led:rgb_blue/brightness",
         .max = LED_PFIX_VANILLA"led:rgb_blue/max_brightness",
       }
+    },
+    // i9300 (galaxy s3 international)
+    {
+      {
+        .on    = LED_PFIX_I9300"led_r/delay_on",
+        .off   = LED_PFIX_I9300"led_r/delay_off",
+        .val   = LED_PFIX_I9300"led_r/brightness",
+        .max   = LED_PFIX_I9300"led_r/max_brightness",
+        .blink = LED_PFIX_I9300"led_r/blink",
+      },
+      {
+        .on    = LED_PFIX_I9300"led_g/delay_on",
+        .off   = LED_PFIX_I9300"led_g/delay_off",
+        .val   = LED_PFIX_I9300"led_g/brightness",
+        .max   = LED_PFIX_I9300"led_g/max_brightness",
+        .blink = LED_PFIX_I9300"led_g/blink",
+      },
+      {
+        .on    = LED_PFIX_I9300"led_b/delay_on",
+        .off   = LED_PFIX_I9300"led_b/delay_off",
+        .val   = LED_PFIX_I9300"led_b/brightness",
+        .max   = LED_PFIX_I9300"led_b/max_brightness",
+        .blink = LED_PFIX_I9300"led_b/blink",
+      }
+    },
+    // yuga (sony xperia z)
+    {
+      {
+        .val    = "/sys/class/leds/lm3533-red/brightness",
+        .maxval = 255,
+      },
+      {
+        .val    = "/sys/class/leds/lm3533-green/brightness",
+        .maxval = 255,
+      },
+      {
+        .val    = "/sys/class/leds/lm3533-blue/brightness",
+        .maxval = 255,
+      },
     },
   };
 
@@ -1175,6 +1351,127 @@ led_control_hammerhead_probe(led_control_t *self)
     if( led_state_hammerhead_probe(&state[0], &paths[i][0]) &&
         led_state_hammerhead_probe(&state[1], &paths[i][1]) &&
         led_state_hammerhead_probe(&state[2], &paths[i][2]) )
+    {
+      res = true;
+      break;
+    }
+  }
+
+  if( !res )
+  {
+    led_control_close(self);
+  }
+
+  return res;
+}
+
+/* ------------------------------------------------------------------------- *
+ * RGB led control: htcvision backend
+ * ------------------------------------------------------------------------- */
+
+static void
+led_control_htcvision_map_color(int r, int g, int b,
+                                int *amber, int *green)
+{
+  /* Only "amber" or "green" color can be used.
+   *
+   * Assume amber = r:ff g:7f b:00
+   *        green = r:00 g:ff b:00
+   *
+   * Try to choose the one with smaller delta to the
+   * requested rgb color by using the 'r':'g' ratio.
+   *
+   * The 'b' is used for intensity preservation only.
+   */
+
+  if( r * 3 < g * 4)
+  {
+    *amber = 0;
+    *green = (g > b) ? g : b;
+  }
+  else
+  {
+    *amber = (r > b) ? r : b;
+    *green = 0;
+  }
+}
+
+static void
+led_control_htcvision_blink_cb(void *data, int on_ms, int off_ms)
+{
+  const led_state_htcvision_t *state = data;
+
+  int blink = (on_ms && off_ms);
+
+  led_state_htcvision_set_blink(state + 0, blink);
+  led_state_htcvision_set_blink(state + 1, blink);
+}
+
+static void
+led_control_htcvision_value_cb(void *data, int r, int g, int b)
+{
+  const led_state_htcvision_t *state = data;
+
+  int amber = 0;
+  int green = 0;
+  led_control_htcvision_map_color(r, g, b, &amber, &green);
+
+  led_state_htcvision_set_value(state + 0, amber);
+  led_state_htcvision_set_value(state + 1, green);
+}
+
+static void
+led_control_htcvision_close_cb(void *data)
+{
+  led_state_htcvision_t *state = data;
+  led_state_htcvision_close(state + 0);
+  led_state_htcvision_close(state + 1);
+}
+
+static bool
+led_control_htcvision_probe(led_control_t *self)
+{
+#define LED_PFIX_HTCVISION "/sys/class/leds/"
+
+  /** Sysfs control paths for RGB leds */
+  static const led_paths_htcvision_t paths[][3] =
+  {
+    // htc vision, htc ace
+    {
+      {
+        .max   = LED_PFIX_HTCVISION"amber/max_brightness",
+        .val   = LED_PFIX_HTCVISION"amber/brightness",
+        .blink = LED_PFIX_HTCVISION"amber/blink",
+      },
+      {
+        .max   = LED_PFIX_HTCVISION"green/max_brightness",
+        .val   = LED_PFIX_HTCVISION"green/brightness",
+        .blink = LED_PFIX_HTCVISION"green/blink",
+      },
+    },
+  };
+
+  static led_state_htcvision_t state[2];
+
+  bool res = false;
+
+  led_state_htcvision_init(state+0);
+  led_state_htcvision_init(state+1);
+
+  self->name   = "htcvision";
+  self->data   = state;
+  self->enable = 0;
+  self->blink  = led_control_htcvision_blink_cb;
+  self->value  = led_control_htcvision_value_cb;
+  self->close  = led_control_htcvision_close_cb;
+
+  /* TODO: check if breathing can be left enabled */
+  self->can_breathe = true;
+
+  for( size_t i = 0; i < G_N_ELEMENTS(paths) ; ++i )
+  {
+    if( led_state_htcvision_probe(&state[0], &paths[i][0]) &&
+        led_state_htcvision_probe(&state[1], &paths[i][1]) )
     {
       res = true;
       break;
@@ -1345,6 +1642,8 @@ static void led_ctrl_close_sysfs_files(void)
  */
 static bool led_ctrl_probe_sysfs_files(void)
 {
+  led_control_init(&led_control);
+
   bool probed = led_control_probe(&led_control);
 
   mce_log(LOG_DEBUG, "led sysfs backend: %s",
@@ -1640,6 +1939,9 @@ bool mce_hybris_indicator_init(void)
   ack = true;
 
 cleanup:
+
+  mce_log(LOG_DEBUG, "res = %s", ack ? "true" : "false");
+
   return ack;
 }
 
@@ -1791,13 +2093,30 @@ cleanup:
 bool
 mce_hybris_indicator_can_breathe(void)
 {
-  if( !led_ctrl_uses_sysfs ) {
-    /* We can't know how access via hybris behaves, so
-     * err on the safe side and assume that breathing is not ok */
-    return false;
+  bool ack = false;
+
+  /* Note: We can't know how access via hybris behaves, so err
+   *       on the safe side and assume that breathing is not ok
+   *       unless we have direct sysfs controls.
+   */
+
+  if( led_ctrl_uses_sysfs )
+  {
+    ack = led_control_can_breathe(&led_control);
   }
 
-  return led_control_can_breathe(&led_control);
+  /* The result does not change during runtime of mce, so
+   * log only once */
+
+  static bool logged = false;
+
+  if( !logged )
+  {
+    logged = true;
+    mce_log(LOG_DEBUG, "res = %s", ack ? "true" : "false");
+  }
+
+  return ack;
 }
 
 /** Enable/disable sw breathing
@@ -1806,6 +2125,8 @@ mce_hybris_indicator_can_breathe(void)
  */
 void mce_hybris_indicator_enable_breathing(bool enable)
 {
+  mce_log(LOG_DEBUG, "enable = %s", enable ? "true" : "false");
+
   if( !mce_hybris_indicator_can_breathe() ) {
     if( enable ) {
       static bool once = false;
@@ -1835,6 +2156,8 @@ cleanup:
  */
 bool mce_hybris_indicator_set_brightness(int level)
 {
+  mce_log(LOG_DEBUG, "level = %d", level);
+
   if( !led_ctrl_uses_sysfs ) {
     // no breathing control via hybris api
     goto cleanup;
