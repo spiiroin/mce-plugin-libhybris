@@ -977,6 +977,74 @@ led_state_htcvision_set_blink(const led_state_htcvision_t *self, int blink)
 }
 
 /* ------------------------------------------------------------------------- *
+ * sysfs controls for binary on/off led
+ * ------------------------------------------------------------------------- */
+
+typedef struct
+{
+  const char *val;    // W
+} led_paths_binary_t;
+
+typedef struct
+{
+  int maxval;
+  int fd_val;
+  int val_last;
+} led_state_binary_t;
+
+static void
+led_state_binary_init(led_state_binary_t *self)
+{
+  self->maxval   = -1;
+  self->fd_val   = -1;
+  self->val_last = -1;
+}
+
+static void
+led_state_binary_close(led_state_binary_t *self)
+{
+  led_util_close_file(&self->fd_val);
+}
+
+static bool
+led_state_binary_probe(led_state_binary_t *self,
+                       const led_paths_binary_t *path)
+{
+  bool res = false;
+
+  led_state_binary_close(self);
+
+  self->maxval = 1;
+
+  if( !led_util_open_file(&self->fd_val,   path->val) )
+  {
+    goto cleanup;
+  }
+
+  res = true;
+
+cleanup:
+
+  if( !res ) led_state_binary_close(self);
+
+  return res;
+}
+
+static void
+led_state_binary_set_value(led_state_binary_t *self,
+                           int value)
+{
+  if( self->fd_val != -1 )
+  {
+    int scaled = led_util_scale_value(value, self->maxval);
+    if( self->val_last != scaled ) {
+      self->val_last = scaled;
+      dprintf(self->fd_val, "%d", scaled);
+    }
+  }
+}
+
+/* ------------------------------------------------------------------------- *
  * RGB led control: generic frontend
  * ------------------------------------------------------------------------- */
 
@@ -996,6 +1064,7 @@ struct led_control_t
 static bool led_control_vanilla_probe(led_control_t *self);
 static bool led_control_hammerhead_probe(led_control_t *self);
 static bool led_control_htcvision_probe(led_control_t *self);
+static bool led_control_binary_probe(led_control_t *self);
 
 /** Set RGB LED enabled/disable
  *
@@ -1101,6 +1170,7 @@ led_control_probe(led_control_t *self)
     led_control_vanilla_probe,
     led_control_hammerhead_probe,
     led_control_htcvision_probe,
+    led_control_binary_probe,
   };
 
   for( size_t i = 0; i < G_N_ELEMENTS(lut); ++i )
@@ -1472,6 +1542,84 @@ led_control_htcvision_probe(led_control_t *self)
   {
     if( led_state_htcvision_probe(&state[0], &paths[i][0]) &&
         led_state_htcvision_probe(&state[1], &paths[i][1]) )
+    {
+      res = true;
+      break;
+    }
+  }
+
+  if( !res )
+  {
+    led_control_close(self);
+  }
+
+  return res;
+}
+
+/* ------------------------------------------------------------------------- *
+ * RGB led control: binary backend
+ * ------------------------------------------------------------------------- */
+
+static void
+led_control_binary_map_color(int r, int g, int b, int *mono)
+{
+  /* Only binary on/off control is available, use
+   * 255 as logical level if nonzero rgb value has
+   * been requested.
+   */
+  *mono = (r || g || b) ? 255 : 0;
+}
+
+static void
+led_control_binary_value_cb(void *data, int r, int g, int b)
+{
+  led_state_binary_t *state = data;
+
+  int mono = 0;
+  led_control_binary_map_color(r, g, b, &mono);
+  led_state_binary_set_value(state + 0, mono);
+}
+
+static void
+led_control_binary_close_cb(void *data)
+{
+  led_state_binary_t *state = data;
+  led_state_binary_close(state + 0);
+}
+
+static bool
+led_control_binary_probe(led_control_t *self)
+{
+  /** Sysfs control paths for RGB leds */
+  static const led_paths_binary_t paths[][1] =
+  {
+    // binary
+    {
+      {
+        .val = "/sys/class/leds/button-backlight/brightness",
+      },
+    },
+  };
+
+  static led_state_binary_t state[1];
+
+  bool res = false;
+
+  led_state_binary_init(state+0);
+
+  self->name   = "binary";
+  self->data   = state;
+  self->enable = 0;
+  self->blink  = 0;
+  self->value  = led_control_binary_value_cb;
+  self->close  = led_control_binary_close_cb;
+
+  /* We can use sw breathing logic to simulate hw blinking */
+  self->can_breathe = true;
+
+  for( size_t i = 0; i < G_N_ELEMENTS(paths) ; ++i )
+  {
+    if( led_state_binary_probe(&state[0], &paths[i][0]) )
     {
       res = true;
       break;
