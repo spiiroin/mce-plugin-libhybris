@@ -1048,6 +1048,17 @@ led_state_binary_set_value(led_state_binary_t *self,
  * RGB led control: generic frontend
  * ------------------------------------------------------------------------- */
 
+typedef enum {
+  /** Used when sw breathing is not used */
+  LED_RAMP_DISABLED  = 0,
+
+  /** The default half sine curve */
+  LED_RAMP_HALF_SINE = 1,
+
+  /** Step function used for emulating blinking via sw breathing */
+  LED_RAMP_HARD_STEP = 2,
+} led_ramp_t;
+
 typedef struct led_control_t led_control_t;
 
 struct led_control_t
@@ -1055,6 +1066,7 @@ struct led_control_t
   const char *name;
   void       *data;
   bool        can_breathe;
+  led_ramp_t  breath_type;
   void      (*enable)(void *data, bool enable);
   void      (*blink)(void *data, int on_ms, int off_ms);
   void      (*value)(void *data, int r, int g, int b);
@@ -1136,6 +1148,9 @@ led_control_init(led_control_t *self)
 
   /* Assume that it is exceptional if sw breathing can't be supported */
   self->can_breathe = true;
+  /* And half sine curve should be used for breathing */
+  self->breath_type = LED_RAMP_HALF_SINE;
+
 }
 
 /** Set RGB LED enabled/disable
@@ -1189,6 +1204,16 @@ static bool
 led_control_can_breathe(const led_control_t *self)
 {
   return self->can_breathe;
+}
+
+/** Query type of sw breathing backend supports
+ *
+ * @return LED_RAMP_DISABLED, LED_RAMP_HALF_SINE, or ...
+ */
+static led_ramp_t
+led_control_breath_type(const led_control_t *self)
+{
+  return self->can_breathe ? self->breath_type : LED_RAMP_DISABLED;
 }
 
 /* ------------------------------------------------------------------------- *
@@ -1616,6 +1641,7 @@ led_control_binary_probe(led_control_t *self)
 
   /* We can use sw breathing logic to simulate hw blinking */
   self->can_breathe = true;
+  self->breath_type = LED_RAMP_HARD_STEP;
 
   for( size_t i = 0; i < G_N_ELEMENTS(paths) ; ++i )
   {
@@ -1812,9 +1838,9 @@ static void led_ctrl_set_rgb_value(int r, int g, int b)
   led_control_value(&led_control, r, g, b);
 }
 
-/** Generate intensity curve for use from breathing timer
+/** Generate half sine intensity curve for use from breathing timer
  */
-static void led_ctrl_generate_ramp(int ms_on, int ms_off)
+static void led_ctrl_generate_ramp_half_sin(int ms_on, int ms_off)
 {
   int t = ms_on + ms_off;
   int s = (t + LED_CTRL_MAX_STEPS - 1) / LED_CTRL_MAX_STEPS;
@@ -1845,6 +1871,116 @@ static void led_ctrl_generate_ramp(int ms_on, int ms_off)
 
   mce_log(LOG_DEBUG, "delay=%d, steps_on=%d, steps_off=%d",
           led_ctrl_breathe.delay, steps_on, steps_off);
+}
+
+/** Calculate the greatest common divisor of two integer numbers
+ */
+static int gcd(int a, int b)
+{
+  int t;
+  /* Use abs values; will fail if a or b < -INT_MAX */
+  if( a < 0 ) a = -a;
+  if( b < 0 ) b = -b;
+
+  /* Make it so that: a >= b */
+  if( a < b ) t = a, a = b, b = t;
+
+  /* Iterate until a mod b reaches zero */
+  while( b )  t = a % b, a = b, b = t;
+
+  /* Do not return zero even on a == b == 0 */
+  return a ?: 1;
+}
+
+/** Round up number to the next multiple of given step size
+ */
+static int roundup(int val, int range)
+{
+  int extra = val % range;
+  if( extra ) extra = range - extra;
+  return val + extra;
+}
+
+/** Generate hard step intensity curve for use from breathing timer
+ */
+static void led_ctrl_generate_ramp_hard_step(int ms_on, int ms_off)
+{
+  /* Calculate ramp duration - round up given on/off lengths
+   * to avoid totally bizarre values that could cause excessive
+   * number of timer wakeups.
+   */
+  ms_on  = roundup(ms_on,  100);
+  ms_off = roundup(ms_off, 100);
+
+  int ms_tot = ms_on + ms_off;
+
+  /* Ideally we would want to wake up only to flip the led
+   * on/off. But to keep using the existing ramp timer logic,
+   * we wake up in pace of the greatest common divisor for on
+   * and off periods.
+   */
+  int ms_step = gcd(ms_on, ms_off);
+
+  if( ms_step < LED_CTRL_BREATHING_DELAY ) {
+    ms_step = LED_CTRL_BREATHING_DELAY;
+  }
+
+  /* Calculate number of steps we need and make sure it does
+   * not exceed the defined maximum value.
+   */
+  int steps_tot = (ms_tot + ms_step - 1) / ms_step;
+
+  if( steps_tot > LED_CTRL_MAX_STEPS ) {
+    steps_tot = LED_CTRL_MAX_STEPS;
+    ms_step = (ms_tot + steps_tot - 1) / steps_tot;
+
+    if( ms_step < LED_CTRL_BREATHING_DELAY ) {
+      ms_step = LED_CTRL_BREATHING_DELAY;
+    }
+  }
+
+  int steps_on  = (ms_on + ms_step - 1 ) / ms_step;
+  int steps_off = steps_tot - steps_on;
+
+  /* Set intensity value for each step on the ramp.
+   */
+  int i = 0;
+
+  while( i < steps_on  ) led_ctrl_breathe.value[i++] = 255;
+  while( i < steps_tot ) led_ctrl_breathe.value[i++] = 0;
+
+  led_ctrl_breathe.delay = ms_step;
+  led_ctrl_breathe.steps = steps_tot;
+
+  mce_log(LOG_DEBUG, "delay=%d, steps_on=%d, steps_off=%d",
+          led_ctrl_breathe.delay, steps_on, steps_off);
+}
+
+/** Invalidate sw breathing intensity curve
+ */
+static void led_ctrl_generate_ramp_dummy(void)
+{
+  led_ctrl_breathe.delay = 0;
+  led_ctrl_breathe.steps = 0;
+}
+
+/** Generate intensity curve for use from breathing timer
+ */
+static void led_ctrl_generate_ramp(int ms_on, int ms_off)
+{
+  switch( led_control_breath_type(&led_control) ) {
+  case LED_RAMP_HARD_STEP:
+    led_ctrl_generate_ramp_hard_step(ms_on, ms_off);
+    break;
+
+  case LED_RAMP_HALF_SINE:
+    led_ctrl_generate_ramp_half_sin(ms_on, ms_off);
+    break;
+
+  default:
+    led_ctrl_generate_ramp_dummy();
+    break;
+  }
 }
 
 /** Timer id for stopping led */
@@ -1999,6 +2135,15 @@ led_ctrl_start(const led_request_t *next)
   if( old_style == STYLE_BREATH && new_style == STYLE_BREATH &&
       led_request_has_equal_timing(&led_ctrl_curr, &work) ) {
     restart = false;
+  }
+
+  /* If only the als-based brightness level changes, we need to
+   * adjust the breathing amplitude without affecting the phase.
+   * Otherwise assume that the pattern has been changed and the
+   * breathing step counter needs to be reset. */
+  led_ctrl_curr.level = work.level;
+  if( !led_request_is_equal(&led_ctrl_curr, &work) ) {
+    led_ctrl_breathe.step = 0;
   }
 
   led_ctrl_curr = work;
