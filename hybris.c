@@ -1528,7 +1528,7 @@ led_control_htcvision_probe(led_control_t *self)
 {
 #define LED_PFIX_HTCVISION "/sys/class/leds/"
 
-  /** Sysfs control paths for RGB leds */
+  /** Sysfs control paths for Amber/Green leds */
   static const led_paths_htcvision_t paths[][3] =
   {
     // htc vision, htc ace
@@ -1615,7 +1615,7 @@ led_control_binary_close_cb(void *data)
 static bool
 led_control_binary_probe(led_control_t *self)
 {
-  /** Sysfs control paths for RGB leds */
+  /** Sysfs control paths for binary leds */
   static const led_paths_binary_t paths[][1] =
   {
     // binary
