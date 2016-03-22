@@ -1269,55 +1269,52 @@ led_control_vanilla_close_cb(void *data)
 static bool
 led_control_vanilla_probe(led_control_t *self)
 {
-#define LED_PFIX_VANILLA "/sys/class/leds/"
-#define LED_PFIX_I9300   "/sys/class/leds/"
-
   /** Sysfs control paths for RGB leds */
   static const led_paths_vanilla_t paths[][3] =
   {
     // vanilla
     {
       {
-        .on  = LED_PFIX_VANILLA"led:rgb_red/blink_delay_on",
-        .off = LED_PFIX_VANILLA"led:rgb_red/blink_delay_off",
-        .val = LED_PFIX_VANILLA"led:rgb_red/brightness",
-        .max = LED_PFIX_VANILLA"led:rgb_red/max_brightness",
+        .on  = "/sys/class/leds/led:rgb_red/blink_delay_on",
+        .off = "/sys/class/leds/led:rgb_red/blink_delay_off",
+        .val = "/sys/class/leds/led:rgb_red/brightness",
+        .max = "/sys/class/leds/led:rgb_red/max_brightness",
       },
       {
-        .on  = LED_PFIX_VANILLA"led:rgb_green/blink_delay_on",
-        .off = LED_PFIX_VANILLA"led:rgb_green/blink_delay_off",
-        .val = LED_PFIX_VANILLA"led:rgb_green/brightness",
-        .max = LED_PFIX_VANILLA"led:rgb_green/max_brightness",
+        .on  = "/sys/class/leds/led:rgb_green/blink_delay_on",
+        .off = "/sys/class/leds/led:rgb_green/blink_delay_off",
+        .val = "/sys/class/leds/led:rgb_green/brightness",
+        .max = "/sys/class/leds/led:rgb_green/max_brightness",
       },
       {
-        .on  = LED_PFIX_VANILLA"led:rgb_blue/blink_delay_on",
-        .off = LED_PFIX_VANILLA"led:rgb_blue/blink_delay_off",
-        .val = LED_PFIX_VANILLA"led:rgb_blue/brightness",
-        .max = LED_PFIX_VANILLA"led:rgb_blue/max_brightness",
+        .on  = "/sys/class/leds/led:rgb_blue/blink_delay_on",
+        .off = "/sys/class/leds/led:rgb_blue/blink_delay_off",
+        .val = "/sys/class/leds/led:rgb_blue/brightness",
+        .max = "/sys/class/leds/led:rgb_blue/max_brightness",
       }
     },
     // i9300 (galaxy s3 international)
     {
       {
-        .on    = LED_PFIX_I9300"led_r/delay_on",
-        .off   = LED_PFIX_I9300"led_r/delay_off",
-        .val   = LED_PFIX_I9300"led_r/brightness",
-        .max   = LED_PFIX_I9300"led_r/max_brightness",
-        .blink = LED_PFIX_I9300"led_r/blink",
+        .on    = "/sys/class/leds/led_r/delay_on",
+        .off   = "/sys/class/leds/led_r/delay_off",
+        .val   = "/sys/class/leds/led_r/brightness",
+        .max   = "/sys/class/leds/led_r/max_brightness",
+        .blink = "/sys/class/leds/led_r/blink",
       },
       {
-        .on    = LED_PFIX_I9300"led_g/delay_on",
-        .off   = LED_PFIX_I9300"led_g/delay_off",
-        .val   = LED_PFIX_I9300"led_g/brightness",
-        .max   = LED_PFIX_I9300"led_g/max_brightness",
-        .blink = LED_PFIX_I9300"led_g/blink",
+        .on    = "/sys/class/leds/led_g/delay_on",
+        .off   = "/sys/class/leds/led_g/delay_off",
+        .val   = "/sys/class/leds/led_g/brightness",
+        .max   = "/sys/class/leds/led_g/max_brightness",
+        .blink = "/sys/class/leds/led_g/blink",
       },
       {
-        .on    = LED_PFIX_I9300"led_b/delay_on",
-        .off   = LED_PFIX_I9300"led_b/delay_off",
-        .val   = LED_PFIX_I9300"led_b/brightness",
-        .max   = LED_PFIX_I9300"led_b/max_brightness",
-        .blink = LED_PFIX_I9300"led_b/blink",
+        .on    = "/sys/class/leds/led_b/delay_on",
+        .off   = "/sys/class/leds/led_b/delay_off",
+        .val   = "/sys/class/leds/led_b/brightness",
+        .max   = "/sys/class/leds/led_b/max_brightness",
+        .blink = "/sys/class/leds/led_b/blink",
       }
     },
     // yuga (sony xperia z)
@@ -1441,29 +1438,28 @@ led_control_hammerhead_close_cb(void *data)
 static bool
 led_control_hammerhead_probe(led_control_t *self)
 {
-#define LED_PFIX_HAMMERHEAD "/sys/class/leds/"
-
   /** Sysfs control paths for RGB leds */
   static const led_paths_hammerhead_t paths[][3] =
   {
+    // hammerhead (Nexus 5)
     {
       {
-        .max    = LED_PFIX_HAMMERHEAD"red/max_brightness",
-        .val    = LED_PFIX_HAMMERHEAD"red/brightness",
-        .on_off = LED_PFIX_HAMMERHEAD"red/on_off_ms",
-        .enable = LED_PFIX_HAMMERHEAD"red/rgb_start",
+        .max    = "/sys/class/leds/red/max_brightness",
+        .val    = "/sys/class/leds/red/brightness",
+        .on_off = "/sys/class/leds/red/on_off_ms",
+        .enable = "/sys/class/leds/red/rgb_start",
       },
       {
-        .max    = LED_PFIX_HAMMERHEAD"green/max_brightness",
-        .val    = LED_PFIX_HAMMERHEAD"green/brightness",
-        .on_off = LED_PFIX_HAMMERHEAD"green/on_off_ms",
-        .enable = LED_PFIX_HAMMERHEAD"green/rgb_start",
+        .max    = "/sys/class/leds/green/max_brightness",
+        .val    = "/sys/class/leds/green/brightness",
+        .on_off = "/sys/class/leds/green/on_off_ms",
+        .enable = "/sys/class/leds/green/rgb_start",
       },
       {
-        .max    = LED_PFIX_HAMMERHEAD"blue/max_brightness",
-        .val    = LED_PFIX_HAMMERHEAD"blue/brightness",
-        .on_off = LED_PFIX_HAMMERHEAD"blue/on_off_ms",
-        .enable = LED_PFIX_HAMMERHEAD"blue/rgb_start",
+        .max    = "/sys/class/leds/blue/max_brightness",
+        .val    = "/sys/class/leds/blue/brightness",
+        .on_off = "/sys/class/leds/blue/on_off_ms",
+        .enable = "/sys/class/leds/blue/rgb_start",
       }
     },
   };
@@ -1582,22 +1578,20 @@ led_control_htcvision_close_cb(void *data)
 static bool
 led_control_htcvision_probe(led_control_t *self)
 {
-#define LED_PFIX_HTCVISION "/sys/class/leds/"
-
   /** Sysfs control paths for Amber/Green leds */
   static const led_paths_htcvision_t paths[][3] =
   {
     // htc vision, htc ace
     {
       {
-        .max   = LED_PFIX_HTCVISION"amber/max_brightness",
-        .val   = LED_PFIX_HTCVISION"amber/brightness",
-        .blink = LED_PFIX_HTCVISION"amber/blink",
+        .max   = "/sys/class/leds/amber/max_brightness",
+        .val   = "/sys/class/leds/amber/brightness",
+        .blink = "/sys/class/leds/amber/blink",
       },
       {
-        .max   = LED_PFIX_HTCVISION"green/max_brightness",
-        .val   = LED_PFIX_HTCVISION"green/brightness",
-        .blink = LED_PFIX_HTCVISION"green/blink",
+        .max   = "/sys/class/leds/green/max_brightness",
+        .val   = "/sys/class/leds/green/brightness",
+        .blink = "/sys/class/leds/green/blink",
       },
     },
   };
