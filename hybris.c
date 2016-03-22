@@ -1316,6 +1316,21 @@ led_control_vanilla_probe(led_control_t *self)
         .maxval = 255,
       },
     },
+    // onyx (OnePlus X)
+    {
+      {
+        .val    = "/sys/class/leds/red/brightness",
+        .max    = "/sys/class/leds/red/max_brightness",
+      },
+      {
+        .val    = "/sys/class/leds/green/brightness",
+        .max    = "/sys/class/leds/green/max_brightness",
+      },
+      {
+        .val    = "/sys/class/leds/blue/brightness",
+        .max    = "/sys/class/leds/blue/max_brightness",
+      },
+    },
   };
 
   static led_state_vanilla_t state[3];
