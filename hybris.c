@@ -1180,11 +1180,26 @@ led_control_probe(led_control_t *self)
 {
   typedef bool (*led_control_probe_fn)(led_control_t *);
 
+  /* The probing should be done in order that minimizes
+   * chances of false positives.
+   */
   static const led_control_probe_fn lut[] =
   {
-    led_control_vanilla_probe,
+    /* The hammerhead backend requires presense of
+     * unique 'on_off_ms' and 'rgb_start' files. */
     led_control_hammerhead_probe,
+
+    /* The htc vision backend requires presense of
+     * unique 'amber' control directory. */
     led_control_htcvision_probe,
+
+    /* The vanilla backend requires only 'brightness'
+     * control file, but still needs three directories
+     * to be present for red, green and blue channels. */
+    led_control_vanilla_probe,
+
+    /* The binary backend needs just one directory
+     * that has 'brightness' control file. */
     led_control_binary_probe,
   };
 
@@ -1877,7 +1892,12 @@ static bool led_ctrl_probe_sysfs_files(void)
 
   bool probed = led_control_probe(&led_control);
 
-  mce_log(LOG_DEBUG, "led sysfs backend: %s",
+  /* Note: As there are devices that do not have indicator
+   *       led, a ailures to find a suitable backend must
+   *       be assumed to be ok and not logged in the default
+   *       verbosity level.
+   */
+  mce_log(LOG_NOTICE, "led sysfs backend: %s",
           probed ? led_control.name : "N/A");
 
   return probed;
