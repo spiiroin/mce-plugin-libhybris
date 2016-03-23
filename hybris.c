@@ -1218,6 +1218,25 @@ led_control_breath_type(const led_control_t *self)
 
 /* ------------------------------------------------------------------------- *
  * RGB led control: default backend
+ *
+ * Three channels, all of which:
+ * - must have 'brightness' control file
+ * - must have 'max_brightness' control file or nonzero fixed maximum
+ * - can have either
+ *    o blink on/off delay control files
+ *    o blink enabled/disable control control file
+ *
+ * Assumptions built into code:
+ *
+ * - The write() calls to sysfs controls return immediately from kernel to
+ *   userspace, but the kernel side can stay busy with the change for few
+ *   milliseconds -> Frequent intensity changes do not block mce process,
+ *   so sw breathing is feasible. Minimum delay between led state changes
+ *   must be enforced.
+ *
+ * - Blink controls for the R, G and B channels are independent. To avoid
+ *   "rainbow patterns" when more than one channel is used the blink enabling
+ *   for all of the channels as simultaneously as possible.
  * ------------------------------------------------------------------------- */
 
 static void
@@ -1369,6 +1388,18 @@ led_control_vanilla_probe(led_control_t *self)
 
 /* ------------------------------------------------------------------------- *
  * RGB led control: hammerhead backend
+ *
+ * Three channels, all of which:
+ * - must have 'brightness' control file
+ * - must have 'max_brightness' control file
+ * - must have 'on_off_ms' blink delay control file
+ * - must have 'rgb_start' enable/disable control file
+ *
+ * Assumptions built into code:
+ * - Blinking is always soft, handled by kernel driver / hw.
+ * - The sysfs writes will block until change is finished -> Intensity
+ *   changes are slow. Breathing from userspace can't be used as it
+ *   would constantly block mce mainloop.
  * ------------------------------------------------------------------------- */
 
 static void
@@ -1477,6 +1508,16 @@ led_control_hammerhead_probe(led_control_t *self)
 
 /* ------------------------------------------------------------------------- *
  * RGB led control: htcvision backend
+ *
+ * Two channels (amber and green), both of which:
+ * - must have 'brightness' control file
+ * - must have 'max_brightness' control file
+ * - must have 'blink' enable/disable control file
+ *
+ * Assumptions built into code:
+ * - while there are two channels, kernel and/or hw only allows one of them
+ *   to be active -> Map rgb form request from mce to amber/green and try
+ *   to minimize color error.
  * ------------------------------------------------------------------------- */
 
 static void
@@ -1598,6 +1639,13 @@ led_control_htcvision_probe(led_control_t *self)
 
 /* ------------------------------------------------------------------------- *
  * RGB led control: binary backend
+ *
+ * One channels, which:
+ * - must have 'brightness' control file
+ *
+ * Assumptions built into code:
+ * - Using zero brightness disables led, any non-zero value enables it -> If
+ *   mce requests "black" rgb value, use brightness of zero - otherwise 255.
  * ------------------------------------------------------------------------- */
 
 static void
