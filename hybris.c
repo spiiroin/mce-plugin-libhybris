@@ -1180,11 +1180,26 @@ led_control_probe(led_control_t *self)
 {
   typedef bool (*led_control_probe_fn)(led_control_t *);
 
+  /* The probing should be done in order that minimizes
+   * chances of false positives.
+   */
   static const led_control_probe_fn lut[] =
   {
-    led_control_vanilla_probe,
+    /* The hammerhead backend requires presense of
+     * unique 'on_off_ms' and 'rgb_start' files. */
     led_control_hammerhead_probe,
+
+    /* The htc vision backend requires presense of
+     * unique 'amber' control directory. */
     led_control_htcvision_probe,
+
+    /* The vanilla backend requires only 'brightness'
+     * control file, but still needs three directories
+     * to be present for red, green and blue channels. */
+    led_control_vanilla_probe,
+
+    /* The binary backend needs just one directory
+     * that has 'brightness' control file. */
     led_control_binary_probe,
   };
 
@@ -1218,6 +1233,25 @@ led_control_breath_type(const led_control_t *self)
 
 /* ------------------------------------------------------------------------- *
  * RGB led control: default backend
+ *
+ * Three channels, all of which:
+ * - must have 'brightness' control file
+ * - must have 'max_brightness' control file or nonzero fixed maximum
+ * - can have either
+ *    o blink on/off delay control files
+ *    o blink enabled/disable control control file
+ *
+ * Assumptions built into code:
+ *
+ * - The write() calls to sysfs controls return immediately from kernel to
+ *   userspace, but the kernel side can stay busy with the change for few
+ *   milliseconds -> Frequent intensity changes do not block mce process,
+ *   so sw breathing is feasible. Minimum delay between led state changes
+ *   must be enforced.
+ *
+ * - Blink controls for the R, G and B channels are independent. To avoid
+ *   "rainbow patterns" when more than one channel is used the blink enabling
+ *   for all of the channels as simultaneously as possible.
  * ------------------------------------------------------------------------- */
 
 static void
@@ -1250,55 +1284,52 @@ led_control_vanilla_close_cb(void *data)
 static bool
 led_control_vanilla_probe(led_control_t *self)
 {
-#define LED_PFIX_VANILLA "/sys/class/leds/"
-#define LED_PFIX_I9300   "/sys/class/leds/"
-
   /** Sysfs control paths for RGB leds */
   static const led_paths_vanilla_t paths[][3] =
   {
     // vanilla
     {
       {
-        .on  = LED_PFIX_VANILLA"led:rgb_red/blink_delay_on",
-        .off = LED_PFIX_VANILLA"led:rgb_red/blink_delay_off",
-        .val = LED_PFIX_VANILLA"led:rgb_red/brightness",
-        .max = LED_PFIX_VANILLA"led:rgb_red/max_brightness",
+        .on  = "/sys/class/leds/led:rgb_red/blink_delay_on",
+        .off = "/sys/class/leds/led:rgb_red/blink_delay_off",
+        .val = "/sys/class/leds/led:rgb_red/brightness",
+        .max = "/sys/class/leds/led:rgb_red/max_brightness",
       },
       {
-        .on  = LED_PFIX_VANILLA"led:rgb_green/blink_delay_on",
-        .off = LED_PFIX_VANILLA"led:rgb_green/blink_delay_off",
-        .val = LED_PFIX_VANILLA"led:rgb_green/brightness",
-        .max = LED_PFIX_VANILLA"led:rgb_green/max_brightness",
+        .on  = "/sys/class/leds/led:rgb_green/blink_delay_on",
+        .off = "/sys/class/leds/led:rgb_green/blink_delay_off",
+        .val = "/sys/class/leds/led:rgb_green/brightness",
+        .max = "/sys/class/leds/led:rgb_green/max_brightness",
       },
       {
-        .on  = LED_PFIX_VANILLA"led:rgb_blue/blink_delay_on",
-        .off = LED_PFIX_VANILLA"led:rgb_blue/blink_delay_off",
-        .val = LED_PFIX_VANILLA"led:rgb_blue/brightness",
-        .max = LED_PFIX_VANILLA"led:rgb_blue/max_brightness",
+        .on  = "/sys/class/leds/led:rgb_blue/blink_delay_on",
+        .off = "/sys/class/leds/led:rgb_blue/blink_delay_off",
+        .val = "/sys/class/leds/led:rgb_blue/brightness",
+        .max = "/sys/class/leds/led:rgb_blue/max_brightness",
       }
     },
     // i9300 (galaxy s3 international)
     {
       {
-        .on    = LED_PFIX_I9300"led_r/delay_on",
-        .off   = LED_PFIX_I9300"led_r/delay_off",
-        .val   = LED_PFIX_I9300"led_r/brightness",
-        .max   = LED_PFIX_I9300"led_r/max_brightness",
-        .blink = LED_PFIX_I9300"led_r/blink",
+        .on    = "/sys/class/leds/led_r/delay_on",
+        .off   = "/sys/class/leds/led_r/delay_off",
+        .val   = "/sys/class/leds/led_r/brightness",
+        .max   = "/sys/class/leds/led_r/max_brightness",
+        .blink = "/sys/class/leds/led_r/blink",
       },
       {
-        .on    = LED_PFIX_I9300"led_g/delay_on",
-        .off   = LED_PFIX_I9300"led_g/delay_off",
-        .val   = LED_PFIX_I9300"led_g/brightness",
-        .max   = LED_PFIX_I9300"led_g/max_brightness",
-        .blink = LED_PFIX_I9300"led_g/blink",
+        .on    = "/sys/class/leds/led_g/delay_on",
+        .off   = "/sys/class/leds/led_g/delay_off",
+        .val   = "/sys/class/leds/led_g/brightness",
+        .max   = "/sys/class/leds/led_g/max_brightness",
+        .blink = "/sys/class/leds/led_g/blink",
       },
       {
-        .on    = LED_PFIX_I9300"led_b/delay_on",
-        .off   = LED_PFIX_I9300"led_b/delay_off",
-        .val   = LED_PFIX_I9300"led_b/brightness",
-        .max   = LED_PFIX_I9300"led_b/max_brightness",
-        .blink = LED_PFIX_I9300"led_b/blink",
+        .on    = "/sys/class/leds/led_b/delay_on",
+        .off   = "/sys/class/leds/led_b/delay_off",
+        .val   = "/sys/class/leds/led_b/brightness",
+        .max   = "/sys/class/leds/led_b/max_brightness",
+        .blink = "/sys/class/leds/led_b/blink",
       }
     },
     // yuga (sony xperia z)
@@ -1314,6 +1345,21 @@ led_control_vanilla_probe(led_control_t *self)
       {
         .val    = "/sys/class/leds/lm3533-blue/brightness",
         .maxval = 255,
+      },
+    },
+    // onyx (OnePlus X)
+    {
+      {
+        .val    = "/sys/class/leds/red/brightness",
+        .max    = "/sys/class/leds/red/max_brightness",
+      },
+      {
+        .val    = "/sys/class/leds/green/brightness",
+        .max    = "/sys/class/leds/green/max_brightness",
+      },
+      {
+        .val    = "/sys/class/leds/blue/brightness",
+        .max    = "/sys/class/leds/blue/max_brightness",
       },
     },
   };
@@ -1354,6 +1400,18 @@ led_control_vanilla_probe(led_control_t *self)
 
 /* ------------------------------------------------------------------------- *
  * RGB led control: hammerhead backend
+ *
+ * Three channels, all of which:
+ * - must have 'brightness' control file
+ * - must have 'max_brightness' control file
+ * - must have 'on_off_ms' blink delay control file
+ * - must have 'rgb_start' enable/disable control file
+ *
+ * Assumptions built into code:
+ * - Blinking is always soft, handled by kernel driver / hw.
+ * - The sysfs writes will block until change is finished -> Intensity
+ *   changes are slow. Breathing from userspace can't be used as it
+ *   would constantly block mce mainloop.
  * ------------------------------------------------------------------------- */
 
 static void
@@ -1395,29 +1453,28 @@ led_control_hammerhead_close_cb(void *data)
 static bool
 led_control_hammerhead_probe(led_control_t *self)
 {
-#define LED_PFIX_HAMMERHEAD "/sys/class/leds/"
-
   /** Sysfs control paths for RGB leds */
   static const led_paths_hammerhead_t paths[][3] =
   {
+    // hammerhead (Nexus 5)
     {
       {
-        .max    = LED_PFIX_HAMMERHEAD"red/max_brightness",
-        .val    = LED_PFIX_HAMMERHEAD"red/brightness",
-        .on_off = LED_PFIX_HAMMERHEAD"red/on_off_ms",
-        .enable = LED_PFIX_HAMMERHEAD"red/rgb_start",
+        .max    = "/sys/class/leds/red/max_brightness",
+        .val    = "/sys/class/leds/red/brightness",
+        .on_off = "/sys/class/leds/red/on_off_ms",
+        .enable = "/sys/class/leds/red/rgb_start",
       },
       {
-        .max    = LED_PFIX_HAMMERHEAD"green/max_brightness",
-        .val    = LED_PFIX_HAMMERHEAD"green/brightness",
-        .on_off = LED_PFIX_HAMMERHEAD"green/on_off_ms",
-        .enable = LED_PFIX_HAMMERHEAD"green/rgb_start",
+        .max    = "/sys/class/leds/green/max_brightness",
+        .val    = "/sys/class/leds/green/brightness",
+        .on_off = "/sys/class/leds/green/on_off_ms",
+        .enable = "/sys/class/leds/green/rgb_start",
       },
       {
-        .max    = LED_PFIX_HAMMERHEAD"blue/max_brightness",
-        .val    = LED_PFIX_HAMMERHEAD"blue/brightness",
-        .on_off = LED_PFIX_HAMMERHEAD"blue/on_off_ms",
-        .enable = LED_PFIX_HAMMERHEAD"blue/rgb_start",
+        .max    = "/sys/class/leds/blue/max_brightness",
+        .val    = "/sys/class/leds/blue/brightness",
+        .on_off = "/sys/class/leds/blue/on_off_ms",
+        .enable = "/sys/class/leds/blue/rgb_start",
       }
     },
   };
@@ -1462,6 +1519,16 @@ led_control_hammerhead_probe(led_control_t *self)
 
 /* ------------------------------------------------------------------------- *
  * RGB led control: htcvision backend
+ *
+ * Two channels (amber and green), both of which:
+ * - must have 'brightness' control file
+ * - must have 'max_brightness' control file
+ * - must have 'blink' enable/disable control file
+ *
+ * Assumptions built into code:
+ * - while there are two channels, kernel and/or hw only allows one of them
+ *   to be active -> Map rgb form request from mce to amber/green and try
+ *   to minimize color error.
  * ------------------------------------------------------------------------- */
 
 static void
@@ -1526,22 +1593,20 @@ led_control_htcvision_close_cb(void *data)
 static bool
 led_control_htcvision_probe(led_control_t *self)
 {
-#define LED_PFIX_HTCVISION "/sys/class/leds/"
-
   /** Sysfs control paths for Amber/Green leds */
   static const led_paths_htcvision_t paths[][3] =
   {
     // htc vision, htc ace
     {
       {
-        .max   = LED_PFIX_HTCVISION"amber/max_brightness",
-        .val   = LED_PFIX_HTCVISION"amber/brightness",
-        .blink = LED_PFIX_HTCVISION"amber/blink",
+        .max   = "/sys/class/leds/amber/max_brightness",
+        .val   = "/sys/class/leds/amber/brightness",
+        .blink = "/sys/class/leds/amber/blink",
       },
       {
-        .max   = LED_PFIX_HTCVISION"green/max_brightness",
-        .val   = LED_PFIX_HTCVISION"green/brightness",
-        .blink = LED_PFIX_HTCVISION"green/blink",
+        .max   = "/sys/class/leds/green/max_brightness",
+        .val   = "/sys/class/leds/green/brightness",
+        .blink = "/sys/class/leds/green/blink",
       },
     },
   };
@@ -1583,6 +1648,13 @@ led_control_htcvision_probe(led_control_t *self)
 
 /* ------------------------------------------------------------------------- *
  * RGB led control: binary backend
+ *
+ * One channels, which:
+ * - must have 'brightness' control file
+ *
+ * Assumptions built into code:
+ * - Using zero brightness disables led, any non-zero value enables it -> If
+ *   mce requests "black" rgb value, use brightness of zero - otherwise 255.
  * ------------------------------------------------------------------------- */
 
 static void
@@ -1820,7 +1892,12 @@ static bool led_ctrl_probe_sysfs_files(void)
 
   bool probed = led_control_probe(&led_control);
 
-  mce_log(LOG_DEBUG, "led sysfs backend: %s",
+  /* Note: As there are devices that do not have indicator
+   *       led, a ailures to find a suitable backend must
+   *       be assumed to be ok and not logged in the default
+   *       verbosity level.
+   */
+  mce_log(LOG_NOTICE, "led sysfs backend: %s",
           probed ? led_control.name : "N/A");
 
   return probed;
