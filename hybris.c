@@ -1352,14 +1352,23 @@ led_control_vanilla_probe(led_control_t *self)
       {
         .val    = "/sys/class/leds/red/brightness",
         .max    = "/sys/class/leds/red/max_brightness",
+        .on     = "/sys/class/leds/red/pause_hi",
+        .off    = "/sys/class/leds/red/pause_lo",
+        .blink  = "/sys/class/leds/red/blink",
       },
       {
         .val    = "/sys/class/leds/green/brightness",
         .max    = "/sys/class/leds/green/max_brightness",
+        .on     = "/sys/class/leds/green/pause_hi",
+        .off    = "/sys/class/leds/green/pause_lo",
+        .blink  = "/sys/class/leds/green/blink",
       },
       {
         .val    = "/sys/class/leds/blue/brightness",
         .max    = "/sys/class/leds/blue/max_brightness",
+        .on     = "/sys/class/leds/blue/pause_hi",
+        .off    = "/sys/class/leds/blue/pause_lo",
+        .blink  = "/sys/class/leds/blue/blink",
       },
     },
   };
