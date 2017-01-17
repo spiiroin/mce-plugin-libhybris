@@ -897,6 +897,83 @@ led_state_hammerhead_set_blink(const led_state_hammerhead_t *self,
 }
 
 /* ------------------------------------------------------------------------- *
+ * bacon sysfs controls for one channel in RGB led
+ * ------------------------------------------------------------------------- */
+
+typedef struct
+{
+  const char *brightness;
+  const char *grpfreq;
+  const char *grppwm;
+  const char *blink; 
+  const char *ledreset; 
+} led_paths_bacon_t;
+
+typedef struct
+{
+  int fd_brightness;
+  int fd_grpfreq;
+  int fd_grppwm;
+  int fd_blink;
+  int fd_ledreset;
+
+  int brightness;
+  int freq;
+  int pwm;
+  int blink;
+  int maxval;
+} led_state_bacon_t;
+
+static void
+led_state_bacon_init(led_state_bacon_t *self)
+{
+  self->fd_brightness = -1;
+  self->fd_grpfreq = -1;
+  self->fd_grppwm = -1;
+  self->fd_blink = -1;
+  self->fd_ledreset = -1;
+
+  self->blink = 0;
+  self->maxval = 255; // load from max_brightness?
+}
+
+static void
+led_state_bacon_close(led_state_bacon_t *self)
+{
+  led_util_close_file(&self->fd_brightness);
+  led_util_close_file(&self->fd_grpfreq);
+  led_util_close_file(&self->fd_grppwm);
+  led_util_close_file(&self->fd_blink);
+  led_util_close_file(&self->fd_ledreset);
+}
+
+static bool
+led_state_bacon_probe(led_state_bacon_t *self,
+                           const led_paths_bacon_t *path)
+{
+  bool res = false;
+
+  led_state_bacon_close(self);
+
+  if( !led_util_open_file(&self->fd_brightness, path->brightness)    ||
+      !led_util_open_file(&self->fd_grpfreq, path->grpfreq) ||
+      !led_util_open_file(&self->fd_grppwm, path->grppwm) ||
+      !led_util_open_file(&self->fd_blink, path->blink) ||
+      !led_util_open_file(&self->fd_ledreset, path->ledreset))
+  {
+    goto cleanup;
+  }
+
+  res = true;
+
+cleanup:
+
+  if( !res ) led_state_bacon_close(self);
+
+  return res;
+}
+
+/* ------------------------------------------------------------------------- *
  * htcvision sysfs controls for one channel in amber/green led
  * ------------------------------------------------------------------------- */
 
@@ -1076,6 +1153,7 @@ struct led_control_t
 static bool led_control_vanilla_probe(led_control_t *self);
 static bool led_control_hammerhead_probe(led_control_t *self);
 static bool led_control_htcvision_probe(led_control_t *self);
+static bool led_control_bacon_probe(led_control_t *self);
 static bool led_control_binary_probe(led_control_t *self);
 
 /** Set RGB LED enabled/disable
@@ -1192,6 +1270,9 @@ led_control_probe(led_control_t *self)
     /* The htc vision backend requires presense of
      * unique 'amber' control directory. */
     led_control_htcvision_probe,
+
+    /* The bacon backend  */
+    led_control_bacon_probe,
 
     /* The vanilla backend requires only 'brightness'
      * control file, but still needs three directories
@@ -1513,6 +1594,169 @@ led_control_hammerhead_probe(led_control_t *self)
         led_state_hammerhead_probe(&state[1], &paths[i][1]) &&
         led_state_hammerhead_probe(&state[2], &paths[i][2]) )
     {
+      res = true;
+      break;
+    }
+  }
+
+  if( !res )
+  {
+    led_control_close(self);
+  }
+
+  return res;
+}
+
+/* ------------------------------------------------------------------------- *
+ * RGB led control: bacon backend
+ *
+ * Five channels, all of which:
+ * - must have 'brightness' control file
+ * - must have 'grpfreq', 'grppwm' and 'blink' to blink delay control file
+ * - must have 'reset' control file
+ *
+ * Based on code from device/oneplus/bacon/liblight/lights.c
+ *
+ * ------------------------------------------------------------------------- */
+
+static void
+led_control_bacon_enable_cb(void *data, bool enable)
+{
+  const led_state_bacon_t *state = data;
+  mce_log(LOG_INFO, "led_control_bacon_enable_cb(%d)", enable);
+
+  if(!enable)
+    dprintf(state->fd_ledreset, "%d", 1);
+}
+
+static void
+led_control_bacon_blink_cb(void *data, int on_ms, int off_ms)
+{
+  led_state_bacon_t *state = data;
+  mce_log(LOG_INFO, "led_control_bacon_blink_cb(%d,%d)", on_ms, off_ms);
+
+  if( on_ms > 0 && off_ms > 0 ) {
+    int totalMS = on_ms + off_ms;
+
+    // the LED appears to blink about once per second if freq is 20
+    // 1000ms / 20 = 50
+    state->freq = totalMS / 50;
+
+    // pwm specifies the ratio of ON versus OFF
+    // pwm = 0 -> always off
+    // pwm = 255 => always on
+    state->pwm = (on_ms * 255) / totalMS;
+
+    // the low 4 bits are ignored, so round up if necessary
+    if( state->pwm > 0 && state->pwm < 16 )
+      state->pwm = 16;
+
+    state->blink = 1;
+  } else {
+    state->blink = 0;
+    state->freq = 0;
+    state->pwm = 0;
+  }
+
+  if( state->blink ) {
+    dprintf(state->fd_grpfreq, "%d", state->freq);
+    dprintf(state->fd_grppwm, "%d", state->pwm);
+  }
+  dprintf(state->fd_blink, "%d", state->blink);
+}
+
+static void
+led_control_bacon_value_cb(void *data, int r, int g, int b)
+{
+  led_state_bacon_t *state = data;
+
+  mce_log(LOG_INFO, "led_control_bacon_value_cb(%d,%d,%d), blink=%d", r, g, b, state->blink);
+  if( state->blink )
+    dprintf(state->fd_ledreset, "%d", 0);
+
+  (state+0)->brightness = led_util_scale_value(r, (state+0)->maxval);
+  (state+1)->brightness = led_util_scale_value(g, (state+1)->maxval);
+  (state+2)->brightness = led_util_scale_value(b, (state+2)->maxval);
+
+  dprintf((state+0)->fd_brightness, "%d", (state+0)->brightness);
+  dprintf((state+1)->fd_brightness, "%d", (state+1)->brightness);
+  dprintf((state+2)->fd_brightness, "%d", (state+2)->brightness);
+
+  if( state->blink ) {
+    // need to reset the blink when changing color (do we?)
+    dprintf(state->fd_grpfreq, "%d", state->freq); // 1s
+    dprintf(state->fd_grppwm, "%d", state->pwm); // 50%?
+    dprintf(state->fd_blink, "%d", 1);
+  } else
+    dprintf(state->fd_blink, "%d", 0);
+}
+
+static void
+led_control_bacon_close_cb(void *data)
+{
+  led_state_bacon_t *state = data;
+  led_state_bacon_close(state + 0);
+  led_state_bacon_close(state + 1);
+  led_state_bacon_close(state + 2);
+}
+
+static bool
+led_control_bacon_probe(led_control_t *self)
+{
+  /** Sysfs control paths for RGB leds */
+  static const led_paths_bacon_t paths[][3] =
+  {
+    // bacon
+    {
+      {
+        .brightness = "/sys/class/leds/red/brightness",
+        .grpfreq    = "/sys/class/leds/red/device/grpfreq",
+        .grppwm     = "/sys/class/leds/red/device/grppwm",
+        .blink      = "/sys/class/leds/red/device/blink",
+        .ledreset   = "/sys/class/leds/red/device/ledreset",
+      },
+      {
+        .brightness = "/sys/class/leds/green/brightness",
+        .grpfreq    = "/sys/class/leds/green/device/grpfreq",
+        .grppwm     = "/sys/class/leds/green/device/grppwm",
+        .blink      = "/sys/class/leds/green/device/blink",
+        .ledreset   = "/sys/class/leds/green/device/ledreset",
+      },
+      {
+        .brightness = "/sys/class/leds/blue/brightness",
+        .grpfreq    = "/sys/class/leds/blue/device/grpfreq",
+        .grppwm     = "/sys/class/leds/blue/device/grppwm",
+        .blink      = "/sys/class/leds/blue/device/blink",
+        .ledreset   = "/sys/class/leds/blue/device/ledreset",
+      }
+    },
+  };
+
+  static led_state_bacon_t state[3];
+
+  bool res = false;
+
+  led_state_bacon_init(state+0);
+  led_state_bacon_init(state+1);
+  led_state_bacon_init(state+2);
+
+  self->name   = "bacon";
+  self->data   = state;
+  self->enable = led_control_bacon_enable_cb;
+  self->blink  = led_control_bacon_blink_cb;
+  self->value  = led_control_bacon_value_cb;
+  self->close  = led_control_bacon_close_cb;
+
+  // need to check 
+  self->can_breathe = false;
+
+  for( size_t i = 0; i < G_N_ELEMENTS(paths) ; ++i )
+  {
+    if( led_state_bacon_probe(&state[0], &paths[i][0]) &&
+        led_state_bacon_probe(&state[1], &paths[i][1]) &&
+        led_state_bacon_probe(&state[2], &paths[i][2]) )
+    {
+      mce_log(LOG_INFO, "bacon probed!");
       res = true;
       break;
     }
