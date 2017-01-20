@@ -905,8 +905,8 @@ typedef struct
   const char *brightness;
   const char *grpfreq;
   const char *grppwm;
-  const char *blink; 
-  const char *ledreset; 
+  const char *blink;
+  const char *ledreset;
 } led_paths_bacon_t;
 
 typedef struct
@@ -1747,7 +1747,7 @@ led_control_bacon_probe(led_control_t *self)
   self->value  = led_control_bacon_value_cb;
   self->close  = led_control_bacon_close_cb;
 
-  // need to check 
+  // need to check
   self->can_breathe = false;
 
   for( size_t i = 0; i < G_N_ELEMENTS(paths) ; ++i )
