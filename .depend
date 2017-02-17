@@ -1,0 +1,170 @@
+hybris-fb.o:\
+	hybris-fb.c\
+	hybris-fb.h\
+	plugin-api.h\
+	plugin-logging.h\
+
+hybris-fb.pic.o:\
+	hybris-fb.c\
+	hybris-fb.h\
+	plugin-api.h\
+	plugin-logging.h\
+
+hybris-lights.o:\
+	hybris-lights.c\
+	hybris-lights.h\
+	plugin-api.h\
+	plugin-logging.h\
+
+hybris-lights.pic.o:\
+	hybris-lights.c\
+	hybris-lights.h\
+	plugin-api.h\
+	plugin-logging.h\
+
+hybris-sensors.o:\
+	hybris-sensors.c\
+	hybris-sensors.h\
+	hybris-thread.h\
+	plugin-api.h\
+	plugin-logging.h\
+
+hybris-sensors.pic.o:\
+	hybris-sensors.c\
+	hybris-sensors.h\
+	hybris-thread.h\
+	plugin-api.h\
+	plugin-logging.h\
+
+hybris-thread.o:\
+	hybris-thread.c\
+	hybris-thread.h\
+	plugin-logging.h\
+
+hybris-thread.pic.o:\
+	hybris-thread.c\
+	hybris-thread.h\
+	plugin-logging.h\
+
+plugin-api.o:\
+	plugin-api.c\
+	hybris-fb.h\
+	hybris-lights.h\
+	hybris-sensors.h\
+	plugin-api.h\
+	plugin-logging.h\
+	sysfs-led-main.h\
+
+plugin-api.pic.o:\
+	plugin-api.c\
+	hybris-fb.h\
+	hybris-lights.h\
+	hybris-sensors.h\
+	plugin-api.h\
+	plugin-logging.h\
+	sysfs-led-main.h\
+
+plugin-logging.o:\
+	plugin-logging.c\
+	plugin-api.h\
+	plugin-logging.h\
+
+plugin-logging.pic.o:\
+	plugin-logging.c\
+	plugin-api.h\
+	plugin-logging.h\
+
+sysfs-led-bacon.o:\
+	sysfs-led-bacon.c\
+	plugin-logging.h\
+	sysfs-led-bacon.h\
+	sysfs-led-main.h\
+	sysfs-led-util.h\
+
+sysfs-led-bacon.pic.o:\
+	sysfs-led-bacon.c\
+	plugin-logging.h\
+	sysfs-led-bacon.h\
+	sysfs-led-main.h\
+	sysfs-led-util.h\
+
+sysfs-led-binary.o:\
+	sysfs-led-binary.c\
+	sysfs-led-binary.h\
+	sysfs-led-main.h\
+	sysfs-led-util.h\
+
+sysfs-led-binary.pic.o:\
+	sysfs-led-binary.c\
+	sysfs-led-binary.h\
+	sysfs-led-main.h\
+	sysfs-led-util.h\
+
+sysfs-led-hammerhead.o:\
+	sysfs-led-hammerhead.c\
+	sysfs-led-hammerhead.h\
+	sysfs-led-main.h\
+	sysfs-led-util.h\
+
+sysfs-led-hammerhead.pic.o:\
+	sysfs-led-hammerhead.c\
+	sysfs-led-hammerhead.h\
+	sysfs-led-main.h\
+	sysfs-led-util.h\
+
+sysfs-led-htcvision.o:\
+	sysfs-led-htcvision.c\
+	sysfs-led-htcvision.h\
+	sysfs-led-main.h\
+	sysfs-led-util.h\
+
+sysfs-led-htcvision.pic.o:\
+	sysfs-led-htcvision.c\
+	sysfs-led-htcvision.h\
+	sysfs-led-main.h\
+	sysfs-led-util.h\
+
+sysfs-led-main.o:\
+	sysfs-led-main.c\
+	plugin-logging.h\
+	sysfs-led-bacon.h\
+	sysfs-led-binary.h\
+	sysfs-led-hammerhead.h\
+	sysfs-led-htcvision.h\
+	sysfs-led-main.h\
+	sysfs-led-util.h\
+	sysfs-led-vanilla.h\
+
+sysfs-led-main.pic.o:\
+	sysfs-led-main.c\
+	plugin-logging.h\
+	sysfs-led-bacon.h\
+	sysfs-led-binary.h\
+	sysfs-led-hammerhead.h\
+	sysfs-led-htcvision.h\
+	sysfs-led-main.h\
+	sysfs-led-util.h\
+	sysfs-led-vanilla.h\
+
+sysfs-led-util.o:\
+	sysfs-led-util.c\
+	plugin-logging.h\
+	sysfs-led-util.h\
+
+sysfs-led-util.pic.o:\
+	sysfs-led-util.c\
+	plugin-logging.h\
+	sysfs-led-util.h\
+
+sysfs-led-vanilla.o:\
+	sysfs-led-vanilla.c\
+	sysfs-led-main.h\
+	sysfs-led-util.h\
+	sysfs-led-vanilla.h\
+
+sysfs-led-vanilla.pic.o:\
+	sysfs-led-vanilla.c\
+	sysfs-led-main.h\
+	sysfs-led-util.h\
+	sysfs-led-vanilla.h\
+
