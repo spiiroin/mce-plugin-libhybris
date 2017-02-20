@@ -28,7 +28,7 @@ clean:: mostlyclean
 	$(RM) $(TARGETS)
 
 distclean:: clean
-	$(RM) *.so *.p *.q
+	$(RM) *.so *.p *.q *.i
 
 mostlyclean::
 	$(RM) *.o *~ *.bak
@@ -40,12 +40,14 @@ mostlyclean::
 CPPFLAGS += -D_GNU_SOURCE
 CPPFLAGS += -D_FILE_OFFSET_BITS=64
 CPPFLAGS += -D_THREAD_SAFE
+CPPFLAGS += -DMCE_HYBRIS_INTERNAL=2
 
 COMMON   += -Wall
-COMMON   += -W
+COMMON   += -Wextra
 COMMON   += -Wmissing-prototypes
 COMMON   += -Os
 COMMON   += -g
+COMMON   += -fvisibility=hidden
 
 CFLAGS   += $(COMMON)
 CFLAGS   += -std=c99
@@ -90,25 +92,44 @@ LDLIBS   += $(PKG_LDLIBS)
 .SUFFIXES: %.pic.o
 .PRECIOUS: %.pic.o
 
-%.so : %.pic.o
+%.so :
 	$(CC) -o $@ -shared $^ $(LDFLAGS) $(LDLIBS)
 
 %.pic.o : %.c
 	$(CC) -c -o $@ $< -fPIC $(CPPFLAGS) $(CFLAGS)
 
 %.q : %.c
-	$(CC) -E -o $@ $<
+	$(CC) -E -o $@ $(CPPFLAGS) $<
 
 %.p : %.q
-	cat $< | cproto    | sed -e 's/_Bool/bool/g' > $@
-#	cat $< | cproto -S | sed -e 's/_Bool/bool/g' > $@
+	cat $< | cproto    | prettyproto.py > $@
+%.i : %.q
+	cat $< | cproto -s | prettyproto.py > $@
+
+preprocess: $(patsubst %.c,%.q,$(wildcard *.c))
+prototypes: $(patsubst %.c,%.p,$(wildcard *.c))
+locals: $(patsubst %.c,%.i,$(wildcard *.c))
 
 # ----------------------------------------------------------------------------
 # Explicit dependencies
 # ----------------------------------------------------------------------------
 
+hybris_OBJS += hybris-fb.pic.o
+hybris_OBJS += hybris-lights.pic.o
+hybris_OBJS += hybris-sensors.pic.o
+hybris_OBJS += hybris-thread.pic.o
+hybris_OBJS += plugin-api.pic.o
+hybris_OBJS += plugin-logging.pic.o
+hybris_OBJS += sysfs-led-bacon.pic.o
+hybris_OBJS += sysfs-led-binary.pic.o
+hybris_OBJS += sysfs-led-hammerhead.pic.o
+hybris_OBJS += sysfs-led-htcvision.pic.o
+hybris_OBJS += sysfs-led-main.pic.o
+hybris_OBJS += sysfs-led-util.pic.o
+hybris_OBJS += sysfs-led-vanilla.pic.o
+
 hybris.so : LDLIBS += -lhardware -lm
-hybris.so : hybris.pic.o
+hybris.so : $(hybris_OBJS)
 
 install:: hybris.so
 	install -d -m755 $(DESTDIR)$(_LIBDIR)/mce/modules
@@ -122,3 +143,41 @@ install:: hybris.so
 normalize::
 	normalize_whitespace -M Makefile
 	normalize_whitespace -a $(wildcard *.[ch] *.cc *.cpp)
+
+# ----------------------------------------------------------------------------
+# AUTOMATIC HEADER DEPENDENCIES
+# ----------------------------------------------------------------------------
+
+.PHONY: depend
+depend::
+	@echo "Updating .depend"
+	$(CC) -MM $(CPPFLAGS) $(MCE_CFLAGS) $(wildcard *.c) |\
+	./depend_filter.py > .depend
+
+ifneq ($(MAKECMDGOALS),depend) # not while: make depend
+ifneq (,$(wildcard .depend))   # not if .depend does not exist
+include .depend
+endif
+endif
+
+# ----------------------------------------------------------------------------
+# Hunt for excess include statements
+# ----------------------------------------------------------------------------
+
+.PHONY: headers
+.SUFFIXES: %.checked
+
+headers:: c_headers c_sources
+
+%.checked : %
+	find_unneeded_includes.py $(CPPFLAGS) $(CFLAGS) -- $<
+	@touch $@
+
+clean::
+	$(RM) *.checked *.order
+
+c_headers:: $(patsubst %,%.checked,$(wildcard *.h))
+c_sources:: $(patsubst %,%.checked,$(wildcard *.c))
+
+order::
+	find_unneeded_includes.py -- $(wildcard *.h) $(wildcard *.c)
