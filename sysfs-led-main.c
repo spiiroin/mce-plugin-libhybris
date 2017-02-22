@@ -29,6 +29,7 @@
 #include "sysfs-led-bacon.h"
 #include "sysfs-led-htcvision.h"
 #include "sysfs-led-binary.h"
+#include "sysfs-led-redgreen.h"
 
 #include "plugin-logging.h"
 
@@ -270,6 +271,11 @@ led_control_probe(led_control_t *self)
      * control file, but still needs three directories
      * to be present for red, green and blue channels. */
     led_control_vanilla_probe,
+
+    /* The redgreen uses subset of "standard" rgb led
+     * control paths, so to avoid false positive matches
+     * it must be probed after rgb led controls. */
+    led_control_redgreen_probe,
 
     /* The binary backend needs just one directory
      * that has 'brightness' control file. */

@@ -28,7 +28,7 @@ and enable/disable input from proximity and light sensors.
 %setup -q -n %{name}-%{version}
 
 %build
-make %{?jobs:-j%jobs}
+make %{?_smp_mflags}
 
 %install
 rm -rf %{buildroot}
