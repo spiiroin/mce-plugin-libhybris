@@ -132,8 +132,10 @@ sysfs-led-main.o:\
 	sysfs-led-hammerhead.h\
 	sysfs-led-htcvision.h\
 	sysfs-led-main.h\
+	sysfs-led-redgreen.h\
 	sysfs-led-util.h\
 	sysfs-led-vanilla.h\
+	sysfs-led-white.h\
 
 sysfs-led-main.pic.o:\
 	sysfs-led-main.c\
@@ -143,8 +145,22 @@ sysfs-led-main.pic.o:\
 	sysfs-led-hammerhead.h\
 	sysfs-led-htcvision.h\
 	sysfs-led-main.h\
+	sysfs-led-redgreen.h\
 	sysfs-led-util.h\
 	sysfs-led-vanilla.h\
+	sysfs-led-white.h\
+
+sysfs-led-redgreen.o:\
+	sysfs-led-redgreen.c\
+	sysfs-led-main.h\
+	sysfs-led-redgreen.h\
+	sysfs-led-util.h\
+
+sysfs-led-redgreen.pic.o:\
+	sysfs-led-redgreen.c\
+	sysfs-led-main.h\
+	sysfs-led-redgreen.h\
+	sysfs-led-util.h\
 
 sysfs-led-util.o:\
 	sysfs-led-util.c\
@@ -167,4 +183,16 @@ sysfs-led-vanilla.pic.o:\
 	sysfs-led-main.h\
 	sysfs-led-util.h\
 	sysfs-led-vanilla.h\
+
+sysfs-led-white.o:\
+	sysfs-led-white.c\
+	sysfs-led-main.h\
+	sysfs-led-util.h\
+	sysfs-led-white.h\
+
+sysfs-led-white.pic.o:\
+	sysfs-led-white.c\
+	sysfs-led-main.h\
+	sysfs-led-util.h\
+	sysfs-led-white.h\
 
