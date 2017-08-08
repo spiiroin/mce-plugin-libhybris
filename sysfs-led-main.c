@@ -465,6 +465,7 @@ sysfs_led_probe_files(void)
 static void
 sysfs_led_set_rgb_blink(int on, int off)
 {
+  mce_log(LOG_DEBUG, "on_ms = %d, off_ms = %d", on, off);
   led_control_blink(&led_control, on, off);
 }
 
@@ -473,6 +474,7 @@ sysfs_led_set_rgb_blink(int on, int off)
 static void
 sysfs_led_set_rgb_value(int r, int g, int b)
 {
+  mce_log(LOG_DEBUG, "rgb = %d %d %d", r, g, b);
   led_control_value(&led_control, r, g, b);
 }
 
