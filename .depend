@@ -100,6 +100,20 @@ sysfs-led-binary.pic.o:\
 	sysfs-led-main.h\
 	sysfs-led-util.h\
 
+sysfs-led-f5121.o:\
+	sysfs-led-f5121.c\
+	sysfs-led-f5121.h\
+	sysfs-led-main.h\
+	sysfs-led-util.h\
+	sysfs-val.h\
+
+sysfs-led-f5121.pic.o:\
+	sysfs-led-f5121.c\
+	sysfs-led-f5121.h\
+	sysfs-led-main.h\
+	sysfs-led-util.h\
+	sysfs-val.h\
+
 sysfs-led-hammerhead.o:\
 	sysfs-led-hammerhead.c\
 	sysfs-led-hammerhead.h\
@@ -129,6 +143,7 @@ sysfs-led-main.o:\
 	plugin-logging.h\
 	sysfs-led-bacon.h\
 	sysfs-led-binary.h\
+	sysfs-led-f5121.h\
 	sysfs-led-hammerhead.h\
 	sysfs-led-htcvision.h\
 	sysfs-led-main.h\
@@ -142,6 +157,7 @@ sysfs-led-main.pic.o:\
 	plugin-logging.h\
 	sysfs-led-bacon.h\
 	sysfs-led-binary.h\
+	sysfs-led-f5121.h\
 	sysfs-led-hammerhead.h\
 	sysfs-led-htcvision.h\
 	sysfs-led-main.h\
@@ -195,4 +211,14 @@ sysfs-led-white.pic.o:\
 	sysfs-led-main.h\
 	sysfs-led-util.h\
 	sysfs-led-white.h\
+
+sysfs-val.o:\
+	sysfs-val.c\
+	plugin-logging.h\
+	sysfs-val.h\
+
+sysfs-val.pic.o:\
+	sysfs-val.c\
+	plugin-logging.h\
+	sysfs-val.h\
 

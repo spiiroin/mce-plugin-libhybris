@@ -27,6 +27,7 @@
 #include "sysfs-led-vanilla.h"
 #include "sysfs-led-hammerhead.h"
 #include "sysfs-led-bacon.h"
+#include "sysfs-led-f5121.h"
 #include "sysfs-led-htcvision.h"
 #include "sysfs-led-binary.h"
 #include "sysfs-led-redgreen.h"
@@ -267,6 +268,10 @@ led_control_probe(led_control_t *self)
 
     /* The bacon backend  */
     led_control_bacon_probe,
+
+    /* The f5121 requires  'brightness', 'max_brightness' and 'blink'
+     * control files to be present for red, green and blue channels. */
+    led_control_f5121_probe,
 
     /* The vanilla backend requires only 'brightness'
      * control file, but still needs three directories
