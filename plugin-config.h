@@ -38,6 +38,9 @@
 /** Name of the LED backend to use */
 #define MCE_CONF_LED_CONFIG_HYBRIS_BACKEND "BackEnd"
 
+/** Optional enable/disable sw breathing setting */
+#define MCE_CONF_LED_CONFIG_HYBRIS_BREATHING "QuirkBreathing"
+
 gchar * plugin_config_get_string(const gchar *group, const gchar *key, const gchar *defaultval);
 
 #endif /* PLUGIN_CONFIG_H_ */

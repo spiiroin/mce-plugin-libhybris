@@ -36,6 +36,9 @@ typedef enum
     /** Placeholder ID */
     QUIRK_INVALID = -1,
 
+    /** Override sw breathing desicion made by led backend */
+    QUIRK_BREATHING,
+
     /** Number of quirks */
     QUIRK_COUNT
 } quirk_t;

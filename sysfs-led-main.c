@@ -35,6 +35,7 @@
 
 #include "plugin-logging.h"
 #include "plugin-config.h"
+#include "plugin-quirks.h"
 
 #include <stdint.h>
 #include <unistd.h>
@@ -314,6 +315,8 @@ led_control_probe(led_control_t *self)
     {
       continue;
     }
+
+    self->can_breathe = QUIRK(QUIRK_BREATHING, self->can_breathe);
 
     ack = true;
     break;

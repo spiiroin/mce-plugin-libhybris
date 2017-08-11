@@ -164,6 +164,7 @@ sysfs-led-main.o:\
 	sysfs-led-main.c\
 	plugin-config.h\
 	plugin-logging.h\
+	plugin-quirks.h\
 	sysfs-led-bacon.h\
 	sysfs-led-binary.h\
 	sysfs-led-f5121.h\
@@ -179,6 +180,7 @@ sysfs-led-main.pic.o:\
 	sysfs-led-main.c\
 	plugin-config.h\
 	plugin-logging.h\
+	plugin-quirks.h\
 	sysfs-led-bacon.h\
 	sysfs-led-binary.h\
 	sysfs-led-f5121.h\
