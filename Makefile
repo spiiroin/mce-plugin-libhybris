@@ -121,6 +121,7 @@ hybris_OBJS += hybris-thread.pic.o
 hybris_OBJS += plugin-api.pic.o
 hybris_OBJS += plugin-config.pic.o
 hybris_OBJS += plugin-logging.pic.o
+hybris_OBJS += plugin-quirks.pic.o
 hybris_OBJS += sysfs-led-bacon.pic.o
 hybris_OBJS += sysfs-led-binary.pic.o
 hybris_OBJS += sysfs-led-f5121.pic.o

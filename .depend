@@ -84,6 +84,18 @@ plugin-logging.pic.o:\
 	plugin-api.h\
 	plugin-logging.h\
 
+plugin-quirks.o:\
+	plugin-quirks.c\
+	plugin-config.h\
+	plugin-logging.h\
+	plugin-quirks.h\
+
+plugin-quirks.pic.o:\
+	plugin-quirks.c\
+	plugin-config.h\
+	plugin-logging.h\
+	plugin-quirks.h\
+
 sysfs-led-bacon.o:\
 	sysfs-led-bacon.c\
 	plugin-logging.h\
