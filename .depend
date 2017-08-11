@@ -64,6 +64,16 @@ plugin-api.pic.o:\
 	plugin-logging.h\
 	sysfs-led-main.h\
 
+plugin-config.o:\
+	plugin-config.c\
+	plugin-config.h\
+	plugin-logging.h\
+
+plugin-config.pic.o:\
+	plugin-config.c\
+	plugin-config.h\
+	plugin-logging.h\
+
 plugin-logging.o:\
 	plugin-logging.c\
 	plugin-api.h\
