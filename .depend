@@ -150,6 +150,7 @@ sysfs-led-htcvision.pic.o:\
 
 sysfs-led-main.o:\
 	sysfs-led-main.c\
+	plugin-config.h\
 	plugin-logging.h\
 	sysfs-led-bacon.h\
 	sysfs-led-binary.h\
@@ -164,6 +165,7 @@ sysfs-led-main.o:\
 
 sysfs-led-main.pic.o:\
 	sysfs-led-main.c\
+	plugin-config.h\
 	plugin-logging.h\
 	sysfs-led-bacon.h\
 	sysfs-led-binary.h\
