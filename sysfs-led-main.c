@@ -27,15 +27,19 @@
 #include "sysfs-led-vanilla.h"
 #include "sysfs-led-hammerhead.h"
 #include "sysfs-led-bacon.h"
+#include "sysfs-led-f5121.h"
 #include "sysfs-led-htcvision.h"
 #include "sysfs-led-binary.h"
 #include "sysfs-led-redgreen.h"
 #include "sysfs-led-white.h"
 
 #include "plugin-logging.h"
+#include "plugin-config.h"
+#include "plugin-quirks.h"
 
 #include <stdint.h>
 #include <unistd.h>
+#include <string.h>
 #include <math.h>
 #include <errno.h>
 
@@ -255,44 +259,72 @@ led_control_probe(led_control_t *self)
   /* The probing should be done in order that minimizes
    * chances of false positives.
    */
-  static const led_control_probe_fn lut[] =
+  static const struct
+  {
+    const char          *name;
+    led_control_probe_fn func;
+  } lut[] =
   {
     /* The hammerhead backend requires presense of
      * unique 'on_off_ms' and 'rgb_start' files. */
-    led_control_hammerhead_probe,
+    { "hammerhead", led_control_hammerhead_probe },
 
     /* The htc vision backend requires presense of
      * unique 'amber' control directory. */
-    led_control_htcvision_probe,
+    { "htcvision", led_control_htcvision_probe },
 
     /* The bacon backend  */
-    led_control_bacon_probe,
+    { "bacon", led_control_bacon_probe },
+
+    /* The f5121 requires  'brightness', 'max_brightness' and 'blink'
+     * control files to be present for red, green and blue channels. */
+    { "f5121", led_control_f5121_probe },
 
     /* The vanilla backend requires only 'brightness'
      * control file, but still needs three directories
      * to be present for red, green and blue channels. */
-    led_control_vanilla_probe,
+    { "vanilla", led_control_vanilla_probe },
 
     /* The redgreen uses subset of "standard" rgb led
      * control paths, so to avoid false positive matches
      * it must be probed after rgb led controls. */
-    led_control_redgreen_probe,
+    { "redgreen", led_control_redgreen_probe },
 
     /* Single control channel with actually working
      * brightness control and max_brightness. */
-    led_control_white_probe,
+    { "white", led_control_white_probe },
 
     /* The binary backend needs just one directory
      * that has 'brightness' control file. */
-    led_control_binary_probe,
+    { "binary", led_control_binary_probe },
   };
+
+  bool   ack  = false;
+  gchar *name = plugin_config_get_string(MCE_CONF_LED_CONFIG_HYBRIS_GROUP,
+                                         MCE_CONF_LED_CONFIG_HYBRIS_BACKEND,
+                                         0);
 
   for( size_t i = 0; i < G_N_ELEMENTS(lut); ++i )
   {
-    if( lut[i](self) ) return true;
+    if( name && strcmp(lut[i].name, name) )
+    {
+      continue;
+    }
+
+    if( !lut[i].func(self) )
+    {
+      continue;
+    }
+
+    self->can_breathe = QUIRK(QUIRK_BREATHING, self->can_breathe);
+
+    ack = true;
+    break;
   }
 
-  return false;
+  g_free(name);
+
+  return ack;
 }
 
 /** Set RGB LED enabled/disable
@@ -465,6 +497,7 @@ sysfs_led_probe_files(void)
 static void
 sysfs_led_set_rgb_blink(int on, int off)
 {
+  mce_log(LOG_DEBUG, "on_ms = %d, off_ms = %d", on, off);
   led_control_blink(&led_control, on, off);
 }
 
@@ -473,6 +506,7 @@ sysfs_led_set_rgb_blink(int on, int off)
 static void
 sysfs_led_set_rgb_value(int r, int g, int b)
 {
+  mce_log(LOG_DEBUG, "rgb = %d %d %d", r, g, b);
   led_control_value(&led_control, r, g, b);
 }
 

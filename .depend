@@ -64,6 +64,16 @@ plugin-api.pic.o:\
 	plugin-logging.h\
 	sysfs-led-main.h\
 
+plugin-config.o:\
+	plugin-config.c\
+	plugin-config.h\
+	plugin-logging.h\
+
+plugin-config.pic.o:\
+	plugin-config.c\
+	plugin-config.h\
+	plugin-logging.h\
+
 plugin-logging.o:\
 	plugin-logging.c\
 	plugin-api.h\
@@ -73,6 +83,18 @@ plugin-logging.pic.o:\
 	plugin-logging.c\
 	plugin-api.h\
 	plugin-logging.h\
+
+plugin-quirks.o:\
+	plugin-quirks.c\
+	plugin-config.h\
+	plugin-logging.h\
+	plugin-quirks.h\
+
+plugin-quirks.pic.o:\
+	plugin-quirks.c\
+	plugin-config.h\
+	plugin-logging.h\
+	plugin-quirks.h\
 
 sysfs-led-bacon.o:\
 	sysfs-led-bacon.c\
@@ -100,6 +122,20 @@ sysfs-led-binary.pic.o:\
 	sysfs-led-main.h\
 	sysfs-led-util.h\
 
+sysfs-led-f5121.o:\
+	sysfs-led-f5121.c\
+	sysfs-led-f5121.h\
+	sysfs-led-main.h\
+	sysfs-led-util.h\
+	sysfs-val.h\
+
+sysfs-led-f5121.pic.o:\
+	sysfs-led-f5121.c\
+	sysfs-led-f5121.h\
+	sysfs-led-main.h\
+	sysfs-led-util.h\
+	sysfs-val.h\
+
 sysfs-led-hammerhead.o:\
 	sysfs-led-hammerhead.c\
 	sysfs-led-hammerhead.h\
@@ -126,9 +162,12 @@ sysfs-led-htcvision.pic.o:\
 
 sysfs-led-main.o:\
 	sysfs-led-main.c\
+	plugin-config.h\
 	plugin-logging.h\
+	plugin-quirks.h\
 	sysfs-led-bacon.h\
 	sysfs-led-binary.h\
+	sysfs-led-f5121.h\
 	sysfs-led-hammerhead.h\
 	sysfs-led-htcvision.h\
 	sysfs-led-main.h\
@@ -139,9 +178,12 @@ sysfs-led-main.o:\
 
 sysfs-led-main.pic.o:\
 	sysfs-led-main.c\
+	plugin-config.h\
 	plugin-logging.h\
+	plugin-quirks.h\
 	sysfs-led-bacon.h\
 	sysfs-led-binary.h\
+	sysfs-led-f5121.h\
 	sysfs-led-hammerhead.h\
 	sysfs-led-htcvision.h\
 	sysfs-led-main.h\
@@ -195,4 +237,14 @@ sysfs-led-white.pic.o:\
 	sysfs-led-main.h\
 	sysfs-led-util.h\
 	sysfs-led-white.h\
+
+sysfs-val.o:\
+	sysfs-val.c\
+	plugin-logging.h\
+	sysfs-val.h\
+
+sysfs-val.pic.o:\
+	sysfs-val.c\
+	plugin-logging.h\
+	sysfs-val.h\
 
