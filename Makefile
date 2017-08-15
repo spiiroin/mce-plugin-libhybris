@@ -129,6 +129,7 @@ hybris_OBJS += sysfs-led-redgreen.pic.o
 hybris_OBJS += sysfs-led-util.pic.o
 hybris_OBJS += sysfs-led-vanilla.pic.o
 hybris_OBJS += sysfs-led-white.pic.o
+hybris_OBJS += sysfs-val.pic.o
 
 hybris.so : LDLIBS += -lhardware -lm
 hybris.so : $(hybris_OBJS)
