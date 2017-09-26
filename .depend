@@ -115,12 +115,14 @@ sysfs-led-binary.o:\
 	sysfs-led-binary.h\
 	sysfs-led-main.h\
 	sysfs-led-util.h\
+	sysfs-val.h\
 
 sysfs-led-binary.pic.o:\
 	sysfs-led-binary.c\
 	sysfs-led-binary.h\
 	sysfs-led-main.h\
 	sysfs-led-util.h\
+	sysfs-val.h\
 
 sysfs-led-f5121.o:\
 	sysfs-led-f5121.c\
@@ -153,12 +155,14 @@ sysfs-led-htcvision.o:\
 	sysfs-led-htcvision.h\
 	sysfs-led-main.h\
 	sysfs-led-util.h\
+	sysfs-val.h\
 
 sysfs-led-htcvision.pic.o:\
 	sysfs-led-htcvision.c\
 	sysfs-led-htcvision.h\
 	sysfs-led-main.h\
 	sysfs-led-util.h\
+	sysfs-val.h\
 
 sysfs-led-main.o:\
 	sysfs-led-main.c\
@@ -197,12 +201,14 @@ sysfs-led-redgreen.o:\
 	sysfs-led-main.h\
 	sysfs-led-redgreen.h\
 	sysfs-led-util.h\
+	sysfs-val.h\
 
 sysfs-led-redgreen.pic.o:\
 	sysfs-led-redgreen.c\
 	sysfs-led-main.h\
 	sysfs-led-redgreen.h\
 	sysfs-led-util.h\
+	sysfs-val.h\
 
 sysfs-led-util.o:\
 	sysfs-led-util.c\
@@ -219,24 +225,28 @@ sysfs-led-vanilla.o:\
 	sysfs-led-main.h\
 	sysfs-led-util.h\
 	sysfs-led-vanilla.h\
+	sysfs-val.h\
 
 sysfs-led-vanilla.pic.o:\
 	sysfs-led-vanilla.c\
 	sysfs-led-main.h\
 	sysfs-led-util.h\
 	sysfs-led-vanilla.h\
+	sysfs-val.h\
 
 sysfs-led-white.o:\
 	sysfs-led-white.c\
 	sysfs-led-main.h\
 	sysfs-led-util.h\
 	sysfs-led-white.h\
+	sysfs-val.h\
 
 sysfs-led-white.pic.o:\
 	sysfs-led-white.c\
 	sysfs-led-main.h\
 	sysfs-led-util.h\
 	sysfs-led-white.h\
+	sysfs-val.h\
 
 sysfs-val.o:\
 	sysfs-val.c\

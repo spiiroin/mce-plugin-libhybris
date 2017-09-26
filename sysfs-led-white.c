@@ -32,6 +32,7 @@
 #include "sysfs-led-white.h"
 
 #include "sysfs-led-util.h"
+#include "sysfs-val.h"
 
 #include <stdio.h>
 
@@ -43,14 +44,14 @@
 
 typedef struct
 {
-  const char *max;    // R
-  const char *val;    // W
+    const char *max_brightness;    // R
+    const char *brightness;    // W
 } led_paths_white_t;
 
 typedef struct
 {
-  int maxval;
-  int fd_val;
+    sysfsval_t *cached_max_brightness;
+    sysfsval_t *cached_brightness;
 } led_channel_white_t;
 
 /* ------------------------------------------------------------------------- *
@@ -79,50 +80,59 @@ bool        led_control_white_probe     (led_control_t *self);
 static void
 led_channel_white_init(led_channel_white_t *self)
 {
-  self->maxval = -1;
-  self->fd_val = -1;
+    self->cached_max_brightness = sysfsval_create();
+    self->cached_brightness     = sysfsval_create();
 }
 
 static void
 led_channel_white_close(led_channel_white_t *self)
 {
-  led_util_close_file(&self->fd_val);
+    sysfsval_delete(self->cached_max_brightness),
+        self->cached_max_brightness = 0;
+
+    sysfsval_delete(self->cached_brightness),
+        self->cached_brightness = 0;
 }
 
 static bool
 led_channel_white_probe(led_channel_white_t *self,
                         const led_paths_white_t *path)
 {
-  bool res = false;
+    bool res = false;
 
-  led_channel_white_close(self);
+    if( !sysfsval_open(self->cached_brightness, path->brightness) )
+        goto cleanup;
 
-  if( (self->maxval = led_util_read_number(path->max)) <= 0 )
-  {
-    goto cleanup;
-  }
+    if( !sysfsval_open(self->cached_max_brightness, path->max_brightness) )
+        goto cleanup;
 
-  if( !led_util_open_file(&self->fd_val, path->val) )
-  {
-    goto cleanup;
-  }
+    sysfsval_refresh(self->cached_max_brightness);
 
-  res = true;
+    if( sysfsval_get(self->cached_max_brightness) <= 0 )
+        goto cleanup;
+
+    res = true;
 
 cleanup:
 
-  if( !res ) led_channel_white_close(self);
+    /* Always close the max_brightness file */
+    sysfsval_close(self->cached_max_brightness);
 
-  return res;
+    /* On failure close the other files too */
+    if( !res )
+    {
+        sysfsval_close(self->cached_brightness);
+    }
+
+    return res;
 }
 
 static void
 led_channel_white_set_value(const led_channel_white_t *self, int value)
 {
-  if( self->fd_val != -1 )
-  {
-    dprintf(self->fd_val, "%d", led_util_scale_value(value, self->maxval));
-  }
+    value = led_util_scale_value(value,
+                                 sysfsval_get(self->cached_max_brightness));
+    sysfsval_set(self->cached_brightness, value);
 }
 
 /* ========================================================================= *
@@ -132,73 +142,73 @@ led_channel_white_set_value(const led_channel_white_t *self, int value)
 static void
 led_control_white_map_color(int r, int g, int b, int *white)
 {
-  /* Use maximum value from requested RGB value */
-  if( r < g ) r = g;
-  if( r < b ) r = b;
-  *white = r;
+    /* Use maximum value from requested RGB value */
+    if( r < g ) r = g;
+    if( r < b ) r = b;
+    *white = r;
 }
 
 static void
 led_control_white_value_cb(void *data, int r, int g, int b)
 {
-  const led_channel_white_t *channel = data;
+    const led_channel_white_t *channel = data;
 
-  int white = 0;
-  led_control_white_map_color(r, g, b, &white);
+    int white = 0;
+    led_control_white_map_color(r, g, b, &white);
 
-  led_channel_white_set_value(channel + 0, white);
+    led_channel_white_set_value(channel + 0, white);
 }
 
 static void
 led_control_white_close_cb(void *data)
 {
-  led_channel_white_t *channel = data;
-  led_channel_white_close(channel + 0);
+    led_channel_white_t *channel = data;
+    led_channel_white_close(channel + 0);
 }
 
 bool
 led_control_white_probe(led_control_t *self)
 {
-  /** Sysfs control paths for White leds */
-  static const led_paths_white_t paths[][1] =
-  {
-    // "Motorola Moto G (2nd gen)"
+    /** Sysfs control paths for White leds */
+    static const led_paths_white_t paths[][1] =
     {
-      {
-        .max = "/sys/class/leds/white/max_brightness",
-        .val = "/sys/class/leds/white/brightness",
-      },
-    },
-  };
+        // "Motorola Moto G (2nd gen)"
+        {
+            {
+                .max_brightness = "/sys/class/leds/white/max_brightness",
+                .brightness     = "/sys/class/leds/white/brightness",
+            },
+        },
+    };
 
-  static led_channel_white_t channel[1];
+    static led_channel_white_t channel[1];
 
-  bool res = false;
+    bool res = false;
 
-  led_channel_white_init(channel + 0);
+    led_channel_white_init(channel + 0);
 
-  self->name   = "white";
-  self->data   = channel;
-  self->enable = 0;
-  self->value  = led_control_white_value_cb;
-  self->close  = led_control_white_close_cb;
+    self->name   = "white";
+    self->data   = channel;
+    self->enable = 0;
+    self->value  = led_control_white_value_cb;
+    self->close  = led_control_white_close_cb;
 
-  /* We can use sw breathing logic */
-  self->can_breathe = true;
+    /* We can use sw breathing logic */
+    self->can_breathe = true;
 
-  for( size_t i = 0; i < G_N_ELEMENTS(paths) ; ++i )
-  {
-    if( led_channel_white_probe(&channel[0], &paths[i][0]) )
+    for( size_t i = 0; i < G_N_ELEMENTS(paths) ; ++i )
     {
-      res = true;
-      break;
+        if( led_channel_white_probe(&channel[0], &paths[i][0]) )
+        {
+            res = true;
+            break;
+        }
     }
-  }
 
-  if( !res )
-  {
-    led_control_close(self);
-  }
+    if( !res )
+    {
+        led_control_close(self);
+    }
 
-  return res;
+    return res;
 }
