@@ -26,6 +26,8 @@
 
 # include "plugin-logging.h"
 
+# include <stdbool.h>
+
 # include <glib.h>
 
 /* ========================================================================= *
@@ -42,5 +44,50 @@
 #define MCE_CONF_LED_CONFIG_HYBRIS_BREATHING "QuirkBreathing"
 
 gchar * plugin_config_get_string(const gchar *group, const gchar *key, const gchar *defaultval);
+
+/** Inifile to object member mapping info */
+typedef struct
+{
+    /** Ini-file key */
+    const char *key;
+
+    /** Fallback value in case key is not defined */
+    const char *def;
+
+    /** Offset within object where to store string value */
+    off_t       off;
+} objconf_t;
+
+/** Object configuration entry sentinel */
+#define OBJCONF_STOP \
+     {\
+         .key = 0,\
+     }
+
+/** Object configuration entry for file path
+ *
+ * For object->member matches /sys/dir/member
+ */
+#define OBJCONF_FILE(obj_,memb_,key_)\
+     {\
+         .key = #key_,\
+         .def = #memb_,\
+         .off = offsetof(obj_,memb_),\
+     }
+
+/** Object configuration entry for file path
+ *
+ * For object->member does not match /sys/dir/member
+ */
+#define OBJCONF_FILE_EX(obj_,memb_,key_,def_)\
+     {\
+         .key = #key_,\
+         .def = def_,\
+         .off = offsetof(obj_,memb_),\
+     }
+
+void objconf_init(const objconf_t *cfg, void *obj);
+void objconf_quit(const objconf_t *cfg, void *obj);
+bool objconf_parse(const objconf_t *cfg, void *obj, const char *chn);
 
 #endif /* PLUGIN_CONFIG_H_ */

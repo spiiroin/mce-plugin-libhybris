@@ -52,6 +52,7 @@ struct led_control_t
   const char *name;
   void       *data;
   bool        can_breathe;
+  bool        use_config;
   led_ramp_t  breath_type;
   void      (*enable)(void *data, bool enable);
   void      (*blink) (void *data, int on_ms, int off_ms);

@@ -218,6 +218,9 @@ led_control_init(led_control_t *self)
   self->value  = 0;
   self->close  = 0;
 
+  /* Assume paths from config are not to be used */
+  self->use_config = false;
+
   /* Assume that it is exceptional if sw breathing can't be supported */
   self->can_breathe = true;
   /* And half sine curve should be used for breathing */
@@ -306,6 +309,16 @@ led_control_probe(led_control_t *self)
 
   for( size_t i = 0; i < G_N_ELEMENTS(lut); ++i )
   {
+    self->use_config = false;
+
+    if( name ) {
+      if( strcmp(lut[i].name, name) ) {
+        continue;
+      }
+
+      self->use_config = true;
+    }
+
     if( name && strcmp(lut[i].name, name) )
     {
       continue;
