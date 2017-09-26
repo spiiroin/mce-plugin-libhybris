@@ -813,11 +813,12 @@ sysfs_led_start(const led_state_t *next)
       sysfs_led_generate_ramp(work.on, work.off);
     }
 
+    if( old_style == STYLE_BLINK || new_style == STYLE_BLINK )
+      sysfs_led_reset_blinking = true;
+
     /* Schedule led off after kernel settle timeout; once that
      * is done, new led color/blink/breathing will be started */
     if( !sysfs_led_stop_id ) {
-      sysfs_led_reset_blinking = (old_style == STYLE_BLINK ||
-                                  new_style == STYLE_BLINK);
       sysfs_led_stop_id = g_timeout_add(SYSFS_LED_KERNEL_DELAY,
                                         sysfs_led_stop_cb, 0);
     }
