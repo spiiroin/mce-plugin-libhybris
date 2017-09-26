@@ -153,7 +153,7 @@ led_control_bacon_enable_cb(void *data, bool enable)
   mce_log(LL_INFO, "led_control_bacon_enable_cb(%d)", enable);
 
   if(!enable)
-  dprintf(channel->fd_ledreset, "%d", 1);
+    dprintf(channel->fd_ledreset, "%d", 1);
 }
 
 static void
@@ -176,7 +176,7 @@ led_control_bacon_blink_cb(void *data, int on_ms, int off_ms)
 
     // the low 4 bits are ignored, so round up if necessary
     if( channel->pwm > 0 && channel->pwm < 16 )
-    channel->pwm = 16;
+      channel->pwm = 16;
 
     channel->blink = 1;
   } else {
@@ -199,7 +199,7 @@ led_control_bacon_value_cb(void *data, int r, int g, int b)
 
   mce_log(LL_INFO, "led_control_bacon_value_cb(%d,%d,%d), blink=%d", r, g, b, channel->blink);
   if( channel->blink )
-  dprintf(channel->fd_ledreset, "%d", 0);
+    dprintf(channel->fd_ledreset, "%d", 0);
 
   (channel+0)->brightness = led_util_scale_value(r, (channel+0)->maxval);
   (channel+1)->brightness = led_util_scale_value(g, (channel+1)->maxval);
@@ -215,7 +215,7 @@ led_control_bacon_value_cb(void *data, int r, int g, int b)
     dprintf(channel->fd_grppwm, "%d", channel->pwm); // 50%?
     dprintf(channel->fd_blink, "%d", 1);
   } else
-  dprintf(channel->fd_blink, "%d", 0);
+    dprintf(channel->fd_blink, "%d", 0);
 }
 
 static void
