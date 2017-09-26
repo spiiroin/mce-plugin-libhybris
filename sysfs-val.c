@@ -199,17 +199,23 @@ sysfsval_set(sysfsval_t *self, int value)
 {
     bool ack = true;
 
-    if( self->sv_curr == value )
+    int prev = self->sv_curr;
+    self->sv_curr = value;
+
+    if( prev == self->sv_curr )
+        goto EXIT;
+
+    /* If file is closed: assume it was optional and do not
+     * spam journal with transitions related to it */
+    if( self->sv_file == -1 )
         goto EXIT;
 
     mce_log(LOG_DEBUG, "%s: write: %d -> %d", sysfsval_path(self),
-            self->sv_curr, value);
-
-    self->sv_curr = value;
+            prev, self->sv_curr);
 
     char data[256];
 
-    int todo = snprintf(data, sizeof data, "%d\n", value);
+    int todo = snprintf(data, sizeof data, "%d", value);
     int done = write(self->sv_file, data, todo);
 
     if( done == todo )
@@ -239,11 +245,22 @@ EXIT:
 void
 sysfsval_assume(sysfsval_t *self, int value)
 {
-    if( self->sv_curr != value ) {
-        mce_log(LOG_DEBUG, "%s: assume: %d -> %d", sysfsval_path(self),
-                self->sv_curr, value);
-        self->sv_curr = value;
-    }
+    int prev = self->sv_curr;
+    self->sv_curr = value;
+
+    if( prev == self->sv_curr )
+        goto EXIT;
+
+    /* If file is closed: assume it was optional and do not
+     * spam journal with transitions related to it */
+    if( self->sv_file == -1 )
+        goto EXIT;
+
+    mce_log(LOG_DEBUG, "%s: assume: %d -> %d", sysfsval_path(self),
+            prev, self->sv_curr);
+
+EXIT:
+    return;
 }
 
 /** Invalidate cached value associated with sysfsval_t object
@@ -258,10 +275,21 @@ sysfsval_assume(sysfsval_t *self, int value)
 void
 sysfsval_invalidate(sysfsval_t *self)
 {
-    if( self->sv_curr != -1 ) {
-        self->sv_curr = -1;
-        mce_log(LOG_DEBUG, "%s: invalidated", sysfsval_path(self));
-    }
+    int prev = self->sv_curr;
+    self->sv_curr = -1;
+
+    if( prev == self->sv_curr )
+        goto EXIT;
+
+    /* If file is closed: assume it was optional and do not
+     * spam journal with transitions related to it */
+    if( self->sv_file == -1 )
+        goto EXIT;
+
+    mce_log(LOG_DEBUG, "%s: invalidated", sysfsval_path(self));
+
+EXIT:
+    return;
 }
 
 /** Read value from sysfs file associated with sysfsval_t object
