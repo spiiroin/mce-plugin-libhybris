@@ -37,6 +37,7 @@
 
 #include "sysfs-led-util.h"
 #include "sysfs-val.h"
+#include "plugin-config.h"
 
 #include <stdio.h>
 
@@ -182,8 +183,8 @@ led_control_redgreen_close_cb(void *data)
     led_channel_redgreen_close(channel + 1);
 }
 
-bool
-led_control_redgreen_probe(led_control_t *self)
+static bool
+led_control_redgreen_static_probe(led_channel_redgreen_t *channel)
 {
     /** Sysfs control paths for Red + Green leds */
     static const led_paths_redgreen_t paths[][REDGREEN_CHANNELS] =
@@ -201,6 +202,64 @@ led_control_redgreen_probe(led_control_t *self)
         },
     };
 
+    bool ack = false;
+
+    for( size_t i = 0; i < G_N_ELEMENTS(paths); ++i ) {
+        if( led_channel_redgreen_probe(&channel[0], &paths[i][0]) &&
+            led_channel_redgreen_probe(&channel[1], &paths[i][1]) ) {
+            ack = true;
+            break;
+        }
+    }
+
+    return ack;
+}
+
+static bool
+led_control_redgreen_dynamic_probe(led_channel_redgreen_t *channel)
+{
+    /* See inifiles/60-redgreen.ini for example config file */
+    static const objconf_t redgreen_conf[] =
+    {
+        OBJCONF_FILE(led_paths_redgreen_t, brightness,      Brightness),
+        OBJCONF_FILE(led_paths_redgreen_t, max_brightness,  MaxBrightness),
+        OBJCONF_STOP
+    };
+
+    static const char * const pfix[REDGREEN_CHANNELS] =
+    {
+        "Red", "Green",
+    };
+
+    bool ack = false;
+
+    led_paths_redgreen_t paths[REDGREEN_CHANNELS];
+
+    for( size_t i = 0; i < REDGREEN_CHANNELS; ++i )
+        objconf_init(redgreen_conf, &paths[i]);
+
+    for( size_t i = 0; i < REDGREEN_CHANNELS; ++i )
+    {
+        if( !objconf_parse(redgreen_conf, &paths[i], pfix[i]) )
+            goto cleanup;
+
+        if( !led_channel_redgreen_probe(channel+0, &paths[i]) )
+            goto cleanup;
+    }
+
+    ack = true;
+
+cleanup:
+
+    for( size_t i = 0; i < REDGREEN_CHANNELS; ++i )
+        objconf_quit(redgreen_conf, &paths[i]);
+
+    return ack;
+}
+
+bool
+led_control_redgreen_probe(led_control_t *self)
+{
     static led_channel_redgreen_t channel[REDGREEN_CHANNELS];
 
     bool res = false;
@@ -218,20 +277,14 @@ led_control_redgreen_probe(led_control_t *self)
     self->can_breathe = true;
     self->breath_type = LED_RAMP_HARD_STEP;
 
-    for( size_t i = 0; i < G_N_ELEMENTS(paths) ; ++i )
-    {
-        if( led_channel_redgreen_probe(&channel[0], &paths[i][0]) &&
-            led_channel_redgreen_probe(&channel[1], &paths[i][1]) )
-        {
-            res = true;
-            break;
-        }
-    }
+    if( self->use_config )
+        res = led_control_redgreen_dynamic_probe(channel);
 
     if( !res )
-    {
+        res = led_control_redgreen_static_probe(channel);
+
+    if( !res )
         led_control_close(self);
-    }
 
     return res;
 }

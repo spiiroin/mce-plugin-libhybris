@@ -33,6 +33,7 @@
 
 #include "sysfs-led-util.h"
 #include "sysfs-val.h"
+#include "plugin-config.h"
 
 #include <stdio.h>
 
@@ -139,6 +140,8 @@ led_channel_white_set_value(const led_channel_white_t *self, int value)
  * ALL_CHANNELS
  * ========================================================================= */
 
+#define WHITE_CHANNELS 1
+
 static void
 led_control_white_map_color(int r, int g, int b, int *white)
 {
@@ -165,12 +168,11 @@ led_control_white_close_cb(void *data)
     led_channel_white_t *channel = data;
     led_channel_white_close(channel + 0);
 }
-
-bool
-led_control_white_probe(led_control_t *self)
+static bool
+led_control_white_static_probe(led_channel_white_t *channel)
 {
     /** Sysfs control paths for White leds */
-    static const led_paths_white_t paths[][1] =
+    static const led_paths_white_t paths[][WHITE_CHANNELS] =
     {
         // "Motorola Moto G (2nd gen)"
         {
@@ -181,7 +183,61 @@ led_control_white_probe(led_control_t *self)
         },
     };
 
-    static led_channel_white_t channel[1];
+    bool ack = false;
+
+    for( size_t i = 0; i < G_N_ELEMENTS(paths); ++i ) {
+        if( (ack = led_channel_white_probe(channel+0, &paths[i][0])) )
+            break;
+    }
+
+    return ack;
+}
+
+static bool
+led_control_white_dynamic_probe(led_channel_white_t *channel)
+{
+    static const objconf_t white_conf[] =
+    {
+        OBJCONF_FILE(led_paths_white_t, brightness,     Brightness),
+        OBJCONF_FILE(led_paths_white_t, max_brightness, MaxBrightness),
+        OBJCONF_STOP
+    };
+
+    static const char * const pfix[WHITE_CHANNELS] =
+    {
+        "Led",
+    };
+
+    bool ack = false;
+
+    led_paths_white_t paths[WHITE_CHANNELS];
+
+    for( size_t i = 0; i < WHITE_CHANNELS; ++i )
+        objconf_init(white_conf, &paths[i]);
+
+    for( size_t i = 0; i < WHITE_CHANNELS; ++i ) {
+        if( !objconf_parse(white_conf, &paths[i], pfix[i]) )
+            goto cleanup;
+
+        if( !led_channel_white_probe(channel+0, &paths[i]) )
+            goto cleanup;
+    }
+
+    ack = true;
+
+cleanup:
+
+    for( size_t i = 0; i < WHITE_CHANNELS; ++i )
+        objconf_quit(white_conf, &paths[i]);
+
+    return ack;
+}
+
+bool
+led_control_white_probe(led_control_t *self)
+{
+
+    static led_channel_white_t channel[WHITE_CHANNELS];
 
     bool res = false;
 
@@ -196,19 +252,14 @@ led_control_white_probe(led_control_t *self)
     /* We can use sw breathing logic */
     self->can_breathe = true;
 
-    for( size_t i = 0; i < G_N_ELEMENTS(paths) ; ++i )
-    {
-        if( led_channel_white_probe(&channel[0], &paths[i][0]) )
-        {
-            res = true;
-            break;
-        }
-    }
+    if( self->use_config )
+        res = led_control_white_dynamic_probe(channel);
 
     if( !res )
-    {
+        res = led_control_white_static_probe(channel);
+
+    if( !res )
         led_control_close(self);
-    }
 
     return res;
 }

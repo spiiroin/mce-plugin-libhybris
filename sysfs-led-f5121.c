@@ -37,6 +37,7 @@
 #include "sysfs-led-f5121.h"
 #include "sysfs-led-util.h"
 #include "sysfs-val.h"
+#include "plugin-config.h"
 
 #include <stdio.h>
 
@@ -216,6 +217,8 @@ led_channel_f5121_set_blink(led_channel_f5121_t *self,
  * ALL_CHANNELS
  * ========================================================================= */
 
+#define F5121_CHANNELS 3
+
 static void
 led_control_f5121_blink_cb(void *data, int on_ms, int off_ms)
 {
@@ -243,11 +246,11 @@ led_control_f5121_close_cb(void *data)
     led_channel_f5121_close(channel + 2);
 }
 
-bool
-led_control_f5121_probe(led_control_t *self)
+static bool
+led_control_f5121_static_probe(led_channel_f5121_t *channel)
 {
     /** Sysfs control paths for RGB leds */
-    static const led_paths_f5121_t f5121_paths[][3] =
+    static const led_paths_f5121_t f5121_paths[][F5121_CHANNELS] =
     {
         // f5121 (Sony Xperia X)
         {
@@ -286,7 +289,67 @@ led_control_f5121_probe(led_control_t *self)
         },
     };
 
-    static led_channel_f5121_t channel[3];
+    bool ack = false;
+
+    for( size_t i = 0; i < G_N_ELEMENTS(f5121_paths); ++i ) {
+        if( led_channel_f5121_probe(&channel[0], &f5121_paths[i][0]) &&
+            led_channel_f5121_probe(&channel[1], &f5121_paths[i][1]) &&
+            led_channel_f5121_probe(&channel[2], &f5121_paths[i][2]) ) {
+            ack = true;
+            break;
+        }
+    }
+
+    return ack;
+}
+
+static bool
+led_control_f5121_dynamic_probe(led_channel_f5121_t *channel)
+{
+  /* See inifiles/60-f5121.ini for example */
+  static const objconf_t f5121_conf[] =
+  {
+    OBJCONF_FILE(led_paths_f5121_t, brightness,      Brightness),
+    OBJCONF_FILE(led_paths_f5121_t, max_brightness,  MaxBrightness),
+    OBJCONF_FILE(led_paths_f5121_t, blink,           Blink),
+    OBJCONF_STOP
+  };
+
+  static const char * const pfix[F5121_CHANNELS] =
+  {
+    "Red", "Green", "Blue"
+  };
+
+  bool ack = false;
+
+  led_paths_f5121_t paths[F5121_CHANNELS];
+
+  for( size_t i = 0; i < F5121_CHANNELS; ++i )
+    objconf_init(f5121_conf, &paths[i]);
+
+  for( size_t i = 0; i < F5121_CHANNELS; ++i )
+  {
+    if( !objconf_parse(f5121_conf, &paths[i], pfix[i]) )
+      goto cleanup;
+
+    if( !led_channel_f5121_probe(channel+0, &paths[i]) )
+      goto cleanup;
+  }
+
+  ack = true;
+
+cleanup:
+
+  for( size_t i = 0; i < F5121_CHANNELS; ++i )
+    objconf_quit(f5121_conf, &paths[i]);
+
+  return ack;
+}
+
+bool
+led_control_f5121_probe(led_control_t *self)
+{
+    static led_channel_f5121_t channel[F5121_CHANNELS];
 
     bool ack = false;
 
@@ -304,14 +367,11 @@ led_control_f5121_probe(led_control_t *self)
     /* Prefer to use the built-in soft-blinking */
     self->can_breathe = false;
 
-    for( size_t i = 0; i < G_N_ELEMENTS(f5121_paths) ; ++i ) {
-        if( led_channel_f5121_probe(&channel[0], &f5121_paths[i][0]) &&
-            led_channel_f5121_probe(&channel[1], &f5121_paths[i][1]) &&
-            led_channel_f5121_probe(&channel[2], &f5121_paths[i][2]) ) {
-            ack = true;
-            break;
-        }
-    }
+    if( self->use_config )
+        ack = led_control_f5121_dynamic_probe(channel);
+
+    if( !ack )
+        ack = led_control_f5121_static_probe(channel);
 
     if( !ack )
         led_control_close(self);

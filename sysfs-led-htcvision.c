@@ -39,6 +39,7 @@
 
 #include "sysfs-led-util.h"
 #include "sysfs-val.h"
+#include "plugin-config.h"
 
 #include <stdio.h>
 
@@ -161,6 +162,8 @@ led_channel_htcvision_set_blink(const led_channel_htcvision_t *self, int blink)
  * ALL_CHANNELS
  * ========================================================================= */
 
+#define HTCVISION_CHANNELS 2
+
 static void
 led_control_htcvision_map_color(int r, int g, int b,
                                 int *amber, int *green)
@@ -220,8 +223,8 @@ led_control_htcvision_close_cb(void *data)
   led_channel_htcvision_close(channel + 1);
 }
 
-bool
-led_control_htcvision_probe(led_control_t *self)
+static bool
+led_control_htcvision_static_probe(led_channel_htcvision_t *channel)
 {
   /** Sysfs control paths for Amber/Green leds */
   static const led_paths_htcvision_t paths[][3] =
@@ -241,9 +244,69 @@ led_control_htcvision_probe(led_control_t *self)
     },
   };
 
-  static led_channel_htcvision_t channel[2];
+  bool ack = false;
 
-  bool res = false;
+  for( size_t i = 0; i < G_N_ELEMENTS(paths); ++i ) {
+    if( led_channel_htcvision_probe(&channel[0], &paths[i][0]) &&
+        led_channel_htcvision_probe(&channel[1], &paths[i][1]) ) {
+      ack = true;
+      break;
+    }
+  }
+
+  return ack;
+}
+
+static bool
+led_control_htcvision_dynamic_probe(led_channel_htcvision_t *channel)
+{
+  /* See inifiles/60-htcvision.ini for example */
+  static const objconf_t htcvision_conf[] =
+  {
+    OBJCONF_FILE(led_paths_htcvision_t, brightness,      Brightness),
+    OBJCONF_FILE(led_paths_htcvision_t, max_brightness,  MaxBrightness),
+    OBJCONF_FILE(led_paths_htcvision_t, blink,           Blink),
+    OBJCONF_STOP
+  };
+
+  static const char * const pfix[HTCVISION_CHANNELS] =
+  {
+    "Amber", "Green"
+  };
+
+  bool ack = false;
+
+  led_paths_htcvision_t paths[HTCVISION_CHANNELS];
+
+  for( size_t i = 0; i < HTCVISION_CHANNELS; ++i )
+    objconf_init(htcvision_conf, &paths[i]);
+
+  for( size_t i = 0; i < HTCVISION_CHANNELS; ++i )
+  {
+    if( !objconf_parse(htcvision_conf, &paths[i], pfix[i]) )
+      goto cleanup;
+
+    if( !led_channel_htcvision_probe(channel+0, &paths[i]) )
+      goto cleanup;
+  }
+
+  ack = true;
+
+cleanup:
+
+  for( size_t i = 0; i < HTCVISION_CHANNELS; ++i )
+    objconf_quit(htcvision_conf, &paths[i]);
+
+  return ack;
+}
+
+bool
+led_control_htcvision_probe(led_control_t *self)
+{
+
+  static led_channel_htcvision_t channel[HTCVISION_CHANNELS];
+
+  bool ack = false;
 
   led_channel_htcvision_init(channel+0);
   led_channel_htcvision_init(channel+1);
@@ -258,20 +321,14 @@ led_control_htcvision_probe(led_control_t *self)
   /* TODO: check if breathing can be left enabled */
   self->can_breathe = true;
 
-  for( size_t i = 0; i < G_N_ELEMENTS(paths) ; ++i )
-  {
-    if( led_channel_htcvision_probe(&channel[0], &paths[i][0]) &&
-        led_channel_htcvision_probe(&channel[1], &paths[i][1]) )
-    {
-      res = true;
-      break;
-    }
-  }
+  if( self->use_config )
+    ack = led_control_htcvision_dynamic_probe(channel);
 
-  if( !res )
-  {
+  if( !ack )
+    ack = led_control_htcvision_static_probe(channel);
+
+  if( !ack )
     led_control_close(self);
-  }
 
-  return res;
+  return ack;
 }

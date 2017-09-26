@@ -98,6 +98,7 @@ plugin-quirks.pic.o:\
 
 sysfs-led-bacon.o:\
 	sysfs-led-bacon.c\
+	plugin-config.h\
 	plugin-logging.h\
 	sysfs-led-bacon.h\
 	sysfs-led-main.h\
@@ -105,6 +106,7 @@ sysfs-led-bacon.o:\
 
 sysfs-led-bacon.pic.o:\
 	sysfs-led-bacon.c\
+	plugin-config.h\
 	plugin-logging.h\
 	sysfs-led-bacon.h\
 	sysfs-led-main.h\
@@ -112,6 +114,8 @@ sysfs-led-bacon.pic.o:\
 
 sysfs-led-binary.o:\
 	sysfs-led-binary.c\
+	plugin-config.h\
+	plugin-logging.h\
 	sysfs-led-binary.h\
 	sysfs-led-main.h\
 	sysfs-led-util.h\
@@ -119,6 +123,8 @@ sysfs-led-binary.o:\
 
 sysfs-led-binary.pic.o:\
 	sysfs-led-binary.c\
+	plugin-config.h\
+	plugin-logging.h\
 	sysfs-led-binary.h\
 	sysfs-led-main.h\
 	sysfs-led-util.h\
@@ -126,6 +132,8 @@ sysfs-led-binary.pic.o:\
 
 sysfs-led-f5121.o:\
 	sysfs-led-f5121.c\
+	plugin-config.h\
+	plugin-logging.h\
 	sysfs-led-f5121.h\
 	sysfs-led-main.h\
 	sysfs-led-util.h\
@@ -133,6 +141,8 @@ sysfs-led-f5121.o:\
 
 sysfs-led-f5121.pic.o:\
 	sysfs-led-f5121.c\
+	plugin-config.h\
+	plugin-logging.h\
 	sysfs-led-f5121.h\
 	sysfs-led-main.h\
 	sysfs-led-util.h\
@@ -140,18 +150,24 @@ sysfs-led-f5121.pic.o:\
 
 sysfs-led-hammerhead.o:\
 	sysfs-led-hammerhead.c\
+	plugin-config.h\
+	plugin-logging.h\
 	sysfs-led-hammerhead.h\
 	sysfs-led-main.h\
 	sysfs-led-util.h\
 
 sysfs-led-hammerhead.pic.o:\
 	sysfs-led-hammerhead.c\
+	plugin-config.h\
+	plugin-logging.h\
 	sysfs-led-hammerhead.h\
 	sysfs-led-main.h\
 	sysfs-led-util.h\
 
 sysfs-led-htcvision.o:\
 	sysfs-led-htcvision.c\
+	plugin-config.h\
+	plugin-logging.h\
 	sysfs-led-htcvision.h\
 	sysfs-led-main.h\
 	sysfs-led-util.h\
@@ -159,6 +175,8 @@ sysfs-led-htcvision.o:\
 
 sysfs-led-htcvision.pic.o:\
 	sysfs-led-htcvision.c\
+	plugin-config.h\
+	plugin-logging.h\
 	sysfs-led-htcvision.h\
 	sysfs-led-main.h\
 	sysfs-led-util.h\
@@ -198,6 +216,8 @@ sysfs-led-main.pic.o:\
 
 sysfs-led-redgreen.o:\
 	sysfs-led-redgreen.c\
+	plugin-config.h\
+	plugin-logging.h\
 	sysfs-led-main.h\
 	sysfs-led-redgreen.h\
 	sysfs-led-util.h\
@@ -205,6 +225,8 @@ sysfs-led-redgreen.o:\
 
 sysfs-led-redgreen.pic.o:\
 	sysfs-led-redgreen.c\
+	plugin-config.h\
+	plugin-logging.h\
 	sysfs-led-main.h\
 	sysfs-led-redgreen.h\
 	sysfs-led-util.h\
@@ -222,6 +244,8 @@ sysfs-led-util.pic.o:\
 
 sysfs-led-vanilla.o:\
 	sysfs-led-vanilla.c\
+	plugin-config.h\
+	plugin-logging.h\
 	sysfs-led-main.h\
 	sysfs-led-util.h\
 	sysfs-led-vanilla.h\
@@ -229,6 +253,8 @@ sysfs-led-vanilla.o:\
 
 sysfs-led-vanilla.pic.o:\
 	sysfs-led-vanilla.c\
+	plugin-config.h\
+	plugin-logging.h\
 	sysfs-led-main.h\
 	sysfs-led-util.h\
 	sysfs-led-vanilla.h\
@@ -236,6 +262,8 @@ sysfs-led-vanilla.pic.o:\
 
 sysfs-led-white.o:\
 	sysfs-led-white.c\
+	plugin-config.h\
+	plugin-logging.h\
 	sysfs-led-main.h\
 	sysfs-led-util.h\
 	sysfs-led-white.h\
@@ -243,6 +271,8 @@ sysfs-led-white.o:\
 
 sysfs-led-white.pic.o:\
 	sysfs-led-white.c\
+	plugin-config.h\
+	plugin-logging.h\
 	sysfs-led-main.h\
 	sysfs-led-util.h\
 	sysfs-led-white.h\

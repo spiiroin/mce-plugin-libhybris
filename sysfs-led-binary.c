@@ -36,6 +36,7 @@
 
 #include "sysfs-led-util.h"
 #include "sysfs-val.h"
+#include "plugin-config.h"
 
 #include <stdio.h>
 
@@ -139,6 +140,8 @@ led_channel_binary_set_value(led_channel_binary_t *self, int value)
  * ALL_CHANNELS
  * ========================================================================= */
 
+#define BINARY_CHANNELS 1
+
 static void
 led_control_binary_map_color(int r, int g, int b, int *mono)
 {
@@ -166,11 +169,11 @@ led_control_binary_close_cb(void *data)
     led_channel_binary_close(channel + 0);
 }
 
-bool
-led_control_binary_probe(led_control_t *self)
+static bool
+led_control_binary_static_probe(led_channel_binary_t *channel)
 {
     /** Sysfs control paths for binary leds */
-    static const led_paths_binary_t paths[][1] =
+    static const led_paths_binary_t paths[][BINARY_CHANNELS] =
     {
         // binary
         {
@@ -180,7 +183,60 @@ led_control_binary_probe(led_control_t *self)
         },
     };
 
-    static led_channel_binary_t channel[1];
+    bool ack = false;
+
+    for( size_t i = 0; i < G_N_ELEMENTS(paths); ++i ) {
+        if( (ack = led_channel_binary_probe(channel+0, &paths[i][0])) )
+            break;
+    }
+
+    return ack;
+}
+
+static bool
+led_control_binary_dynamic_probe(led_channel_binary_t *channel)
+{
+    static const objconf_t binary_conf[] =
+    {
+        OBJCONF_FILE(led_paths_binary_t, brightness,     Brightness),
+        OBJCONF_FILE(led_paths_binary_t, max_brightness, MaxBrightness),
+        OBJCONF_STOP
+    };
+
+    static const char * const pfix[BINARY_CHANNELS] =
+    {
+        "Led",
+    };
+
+    bool ack = false;
+
+    led_paths_binary_t paths[BINARY_CHANNELS];
+
+    for( size_t i = 0; i < BINARY_CHANNELS; ++i )
+        objconf_init(binary_conf, &paths[i]);
+
+    for( size_t i = 0; i < BINARY_CHANNELS; ++i ) {
+        if( !objconf_parse(binary_conf, &paths[i], pfix[i]) )
+            goto cleanup;
+
+        if( !led_channel_binary_probe(channel+0, &paths[i]) )
+            goto cleanup;
+    }
+
+    ack = true;
+
+cleanup:
+
+    for( size_t i = 0; i < BINARY_CHANNELS; ++i )
+        objconf_quit(binary_conf, &paths[i]);
+
+    return ack;
+}
+
+bool
+led_control_binary_probe(led_control_t *self)
+{
+    static led_channel_binary_t channel[BINARY_CHANNELS];
 
     bool res = false;
 
@@ -197,19 +253,14 @@ led_control_binary_probe(led_control_t *self)
     self->can_breathe = true;
     self->breath_type = LED_RAMP_HARD_STEP;
 
-    for( size_t i = 0; i < G_N_ELEMENTS(paths) ; ++i )
-    {
-        if( led_channel_binary_probe(&channel[0], &paths[i][0]) )
-        {
-            res = true;
-            break;
-        }
-    }
+    if( self->use_config )
+        res = led_control_binary_dynamic_probe(channel);
 
     if( !res )
-    {
+        res = led_control_binary_static_probe(channel);
+
+    if( !res )
         led_control_close(self);
-    }
 
     return res;
 }

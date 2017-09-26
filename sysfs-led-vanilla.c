@@ -48,6 +48,7 @@
 #include "sysfs-led-vanilla.h"
 #include "sysfs-led-util.h"
 #include "sysfs-val.h"
+#include "plugin-config.h"
 
 #include <stdio.h>
 
@@ -59,11 +60,11 @@
 
 typedef struct
 {
-  const char *max_brightness;   // R
-  const char *brightness;   // W
+  const char *max_brightness;    // R
+  const char *brightness;        // W
   const char *blink_delay_on;    // W
   const char *blink_delay_off;   // W
-  const char *blink; // W
+  const char *blink;             // W
   int         max_override;// value to use if max_brightness path is NULL
 } led_paths_vanilla_t;
 
@@ -212,6 +213,8 @@ led_channel_vanilla_set_blink(led_channel_vanilla_t *self,
  * ALL_CHANNELS
  * ========================================================================= */
 
+#define VANILLA_CHANNELS 3
+
 static void
 led_control_vanilla_blink_cb(void *data, int on_ms, int off_ms)
 {
@@ -239,11 +242,11 @@ led_control_vanilla_close_cb(void *data)
   led_channel_vanilla_close(channel + 2);
 }
 
-bool
-led_control_vanilla_probe(led_control_t *self)
+static bool
+led_control_vanilla_static_probe(led_channel_vanilla_t *channel)
 {
   /** Sysfs control paths for RGB leds */
-  static const led_paths_vanilla_t paths[][3] =
+  static const led_paths_vanilla_t paths[][VANILLA_CHANNELS] =
   {
     // vanilla
     {
@@ -331,7 +334,69 @@ led_control_vanilla_probe(led_control_t *self)
     },
   };
 
-  static led_channel_vanilla_t channel[3];
+  bool ack = false;
+
+  for( size_t i = 0; i < G_N_ELEMENTS(paths); ++i ) {
+    if( led_channel_vanilla_probe(&channel[0], &paths[i][0]) &&
+        led_channel_vanilla_probe(&channel[1], &paths[i][1]) &&
+        led_channel_vanilla_probe(&channel[2], &paths[i][2]) ) {
+      ack = true;
+      break;
+    }
+  }
+
+  return ack;
+}
+
+static bool
+led_control_vanilla_dynamic_probe(led_channel_vanilla_t *channel)
+{
+  static const objconf_t vanilla_conf[] =
+  {
+    OBJCONF_FILE(led_paths_vanilla_t, brightness,      Brightness),
+    OBJCONF_FILE(led_paths_vanilla_t, max_brightness,  MaxBrightness),
+    OBJCONF_FILE(led_paths_vanilla_t, blink_delay_on,  BlinkDelayOn),
+    OBJCONF_FILE(led_paths_vanilla_t, blink_delay_off, BlinkDelayOff),
+    OBJCONF_FILE(led_paths_vanilla_t, blink,           Blink),
+    OBJCONF_STOP
+  };
+
+  static const char * const pfix[VANILLA_CHANNELS] =
+  {
+    "Red", "Green", "Blue"
+  };
+
+  bool ack = false;
+
+  led_paths_vanilla_t paths[VANILLA_CHANNELS];
+
+  for( size_t i = 0; i < VANILLA_CHANNELS; ++i )
+    objconf_init(vanilla_conf, &paths[i]);
+
+  for( size_t i = 0; i < VANILLA_CHANNELS; ++i )
+  {
+    if( !objconf_parse(vanilla_conf, &paths[i], pfix[i]) )
+      goto cleanup;
+
+    if( !led_channel_vanilla_probe(channel+0, &paths[i]) )
+      goto cleanup;
+  }
+
+  ack = true;
+
+cleanup:
+
+  for( size_t i = 0; i < VANILLA_CHANNELS; ++i )
+    objconf_quit(vanilla_conf, &paths[i]);
+
+  return ack;
+}
+
+bool
+led_control_vanilla_probe(led_control_t *self)
+{
+
+  static led_channel_vanilla_t channel[VANILLA_CHANNELS];
 
   bool res = false;
 
@@ -346,21 +411,14 @@ led_control_vanilla_probe(led_control_t *self)
   self->value  = led_control_vanilla_value_cb;
   self->close  = led_control_vanilla_close_cb;
 
-  for( size_t i = 0; i < G_N_ELEMENTS(paths) ; ++i )
-  {
-    if( led_channel_vanilla_probe(&channel[0], &paths[i][0]) &&
-        led_channel_vanilla_probe(&channel[1], &paths[i][1]) &&
-        led_channel_vanilla_probe(&channel[2], &paths[i][2]) )
-    {
-      res = true;
-      break;
-    }
-  }
+  if( self->use_config )
+    res = led_control_vanilla_dynamic_probe(channel);
 
   if( !res )
-  {
+    res = led_control_vanilla_static_probe(channel);
+
+  if( !res )
     led_control_close(self);
-  }
 
   return res;
 }

@@ -37,6 +37,7 @@
 
 #include "sysfs-led-util.h"
 #include "plugin-logging.h"
+#include "plugin-config.h"
 
 #include <stdio.h>
 
@@ -146,6 +147,8 @@ cleanup:
  * ALL_CHANNELS
  * ========================================================================= */
 
+#define BACON_CHANNELS 3
+
 static void
 led_control_bacon_enable_cb(void *data, bool enable)
 {
@@ -227,11 +230,11 @@ led_control_bacon_close_cb(void *data)
   led_channel_bacon_close(channel + 2);
 }
 
-bool
-led_control_bacon_probe(led_control_t *self)
+static bool
+led_control_bacon_static_probe(led_channel_bacon_t *channel)
 {
   /** Sysfs control paths for RGB leds */
-  static const led_paths_bacon_t paths[][3] =
+  static const led_paths_bacon_t paths[][BACON_CHANNELS] =
   {
     // bacon
     {
@@ -259,7 +262,77 @@ led_control_bacon_probe(led_control_t *self)
     },
   };
 
-  static led_channel_bacon_t channel[3];
+  bool ack = false;
+
+  for( size_t i = 0; i < G_N_ELEMENTS(paths); ++i ) {
+    if( led_channel_bacon_probe(&channel[0], &paths[i][0]) &&
+        led_channel_bacon_probe(&channel[1], &paths[i][1]) &&
+        led_channel_bacon_probe(&channel[2], &paths[i][2]) ) {
+      ack = true;
+      break;
+    }
+  }
+
+  return ack;
+}
+
+static bool
+led_control_bacon_dynamic_probe(led_channel_bacon_t *channel)
+{
+  /* See inifiles/60-bacon.ini for example config file */
+  static const objconf_t bacon_conf[] =
+  {
+    OBJCONF_FILE(led_paths_bacon_t, brightness,      Brightness),
+#if 0 // load from max_brightness?
+    OBJCONF_FILE(led_paths_bacon_t, max_brightness,  MaxBrightness),
+#endif
+    OBJCONF_FILE_EX(led_paths_bacon_t, grpfreq,      GrpFreq,
+                    "device/grpfreq"),
+    OBJCONF_FILE_EX(led_paths_bacon_t, grppwm,       GrpPwm,
+                    "device/grppwm"),
+    OBJCONF_FILE_EX(led_paths_bacon_t, blink,        Blink,
+                    "device/blink"),
+    OBJCONF_FILE_EX(led_paths_bacon_t, ledreset,     LedReset,
+                    "device/ledreset"),
+    OBJCONF_STOP
+  };
+
+  static const char * const pfix[BACON_CHANNELS] =
+  {
+    "Red", "Green", "Blue"
+  };
+
+  bool ack = false;
+
+  led_paths_bacon_t paths[BACON_CHANNELS];
+
+  for( size_t i = 0; i < BACON_CHANNELS; ++i )
+    objconf_init(bacon_conf, &paths[i]);
+
+  for( size_t i = 0; i < BACON_CHANNELS; ++i )
+  {
+    if( !objconf_parse(bacon_conf, &paths[i], pfix[i]) )
+      goto cleanup;
+
+    if( !led_channel_bacon_probe(channel+0, &paths[i]) )
+      goto cleanup;
+  }
+
+  ack = true;
+
+cleanup:
+
+  for( size_t i = 0; i < BACON_CHANNELS; ++i )
+    objconf_quit(bacon_conf, &paths[i]);
+
+  return ack;
+}
+
+bool
+led_control_bacon_probe(led_control_t *self)
+{
+
+  static led_channel_bacon_t channel[BACON_CHANNELS];
 
   bool res = false;
 
@@ -277,22 +350,14 @@ led_control_bacon_probe(led_control_t *self)
   // need to check
   self->can_breathe = false;
 
-  for( size_t i = 0; i < G_N_ELEMENTS(paths) ; ++i )
-  {
-    if( led_channel_bacon_probe(&channel[0], &paths[i][0]) &&
-        led_channel_bacon_probe(&channel[1], &paths[i][1]) &&
-        led_channel_bacon_probe(&channel[2], &paths[i][2]) )
-    {
-      mce_log(LL_INFO, "bacon probed!");
-      res = true;
-      break;
-    }
-  }
+  if( self->use_config )
+    res = led_control_bacon_dynamic_probe(channel);
 
   if( !res )
-  {
+    res = led_control_bacon_static_probe(channel);
+
+  if( !res )
     led_control_close(self);
-  }
 
   return res;
 }

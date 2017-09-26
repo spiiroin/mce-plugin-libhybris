@@ -40,6 +40,7 @@
 #include "sysfs-led-hammerhead.h"
 
 #include "sysfs-led-util.h"
+#include "plugin-config.h"
 
 #include <stdio.h>
 #include <unistd.h>
@@ -179,6 +180,8 @@ led_channel_hammerhead_set_blink(const led_channel_hammerhead_t *self,
  * ALL_CHANNELS
  * ========================================================================= */
 
+#define HAMMERHEAD_CHANNELS 3
+
 static void
 led_control_hammerhead_enable_cb(void *data, bool enable)
 {
@@ -215,11 +218,11 @@ led_control_hammerhead_close_cb(void *data)
   led_channel_hammerhead_close(channel + 2);
 }
 
-bool
-led_control_hammerhead_probe(led_control_t *self)
+static bool
+led_control_hammerhead_static_probe(led_channel_hammerhead_t *channel)
 {
   /** Sysfs control paths for RGB leds */
-  static const led_paths_hammerhead_t paths[][3] =
+  static const led_paths_hammerhead_t paths[][HAMMERHEAD_CHANNELS] =
   {
     // hammerhead (Nexus 5)
     {
@@ -244,9 +247,71 @@ led_control_hammerhead_probe(led_control_t *self)
     },
   };
 
-  static led_channel_hammerhead_t channel[3];
+  bool ack = false;
 
-  bool res = false;
+  for( size_t i = 0; i < G_N_ELEMENTS(paths); ++i ) {
+    if( led_channel_hammerhead_probe(&channel[0], &paths[i][0]) &&
+        led_channel_hammerhead_probe(&channel[1], &paths[i][1]) &&
+        led_channel_hammerhead_probe(&channel[2], &paths[i][2]) ) {
+      ack = true;
+      break;
+    }
+  }
+
+  return ack;
+}
+
+static bool
+led_control_hammerhead_dynamic_probe(led_channel_hammerhead_t *channel)
+{
+  /* See inifiles/60-hammerhead.ini for example */
+  static const objconf_t hammerhead_conf[] =
+  {
+    OBJCONF_FILE(led_paths_hammerhead_t, brightness,      Brightness),
+    OBJCONF_FILE(led_paths_hammerhead_t, max_brightness,  MaxBrightness),
+    OBJCONF_FILE(led_paths_hammerhead_t, on_off_ms,       OnOffMs),
+    OBJCONF_FILE(led_paths_hammerhead_t, rgb_start,       RgbStart),
+    OBJCONF_STOP
+  };
+
+  static const char * const pfix[HAMMERHEAD_CHANNELS] =
+  {
+    "Red", "Green", "Blue"
+  };
+
+  bool ack = false;
+
+  led_paths_hammerhead_t paths[HAMMERHEAD_CHANNELS];
+
+  for( size_t i = 0; i < HAMMERHEAD_CHANNELS; ++i )
+    objconf_init(hammerhead_conf, &paths[i]);
+
+  for( size_t i = 0; i < HAMMERHEAD_CHANNELS; ++i )
+  {
+    if( !objconf_parse(hammerhead_conf, &paths[i], pfix[i]) )
+      goto cleanup;
+
+    if( !led_channel_hammerhead_probe(channel+0, &paths[i]) )
+      goto cleanup;
+  }
+
+  ack = true;
+
+cleanup:
+
+  for( size_t i = 0; i < HAMMERHEAD_CHANNELS; ++i )
+    objconf_quit(hammerhead_conf, &paths[i]);
+
+  return ack;
+}
+
+bool
+led_control_hammerhead_probe(led_control_t *self)
+{
+
+  static led_channel_hammerhead_t channel[HAMMERHEAD_CHANNELS];
+
+  bool ack = false;
 
   led_channel_hammerhead_init(channel+0);
   led_channel_hammerhead_init(channel+1);
@@ -263,21 +328,14 @@ led_control_hammerhead_probe(led_control_t *self)
    * cpu cycles that we just can't have breathing available */
   self->can_breathe = false;
 
-  for( size_t i = 0; i < G_N_ELEMENTS(paths) ; ++i )
-  {
-    if( led_channel_hammerhead_probe(&channel[0], &paths[i][0]) &&
-        led_channel_hammerhead_probe(&channel[1], &paths[i][1]) &&
-        led_channel_hammerhead_probe(&channel[2], &paths[i][2]) )
-    {
-      res = true;
-      break;
-    }
-  }
+  if( self->use_config )
+    ack = led_control_hammerhead_dynamic_probe(channel);
 
-  if( !res )
-  {
+  if( !ack )
+    ack = led_control_hammerhead_static_probe(channel);
+
+  if( !ack )
     led_control_close(self);
-  }
 
-  return res;
+  return ack;
 }
