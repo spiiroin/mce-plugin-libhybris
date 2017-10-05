@@ -36,6 +36,8 @@
 #include "sysfs-led-redgreen.h"
 
 #include "sysfs-led-util.h"
+#include "sysfs-val.h"
+#include "plugin-config.h"
 
 #include <stdio.h>
 
@@ -47,14 +49,14 @@
 
 typedef struct
 {
-  const char *max;    // R
-  const char *val;    // W
+    const char *max_brightness;
+    const char *brightness;
 } led_paths_redgreen_t;
 
 typedef struct
 {
-  int maxval;
-  int fd_val;
+    sysfsval_t *cached_max_brightness;
+    sysfsval_t *cached_brightness;
 } led_channel_redgreen_t;
 
 /* ------------------------------------------------------------------------- *
@@ -83,146 +85,206 @@ bool               led_control_redgreen_probe       (led_control_t *self);
 static void
 led_channel_redgreen_init(led_channel_redgreen_t *self)
 {
-  self->maxval   = -1;
-  self->fd_val   = -1;
+    self->cached_max_brightness = sysfsval_create();
+    self->cached_brightness     = sysfsval_create();
 }
 
 static void
 led_channel_redgreen_close(led_channel_redgreen_t *self)
 {
-  led_util_close_file(&self->fd_val);
+    sysfsval_delete(self->cached_max_brightness),
+        self->cached_max_brightness = 0;
+
+    sysfsval_delete(self->cached_brightness),
+        self->cached_brightness = 0;
 }
 
 static bool
 led_channel_redgreen_probe(led_channel_redgreen_t *self,
-                            const led_paths_redgreen_t *path)
+                           const led_paths_redgreen_t *path)
 {
-  bool res = false;
+    bool res = false;
 
-  led_channel_redgreen_close(self);
+    if( !sysfsval_open(self->cached_brightness, path->brightness) )
+        goto cleanup;
 
-  if( (self->maxval = led_util_read_number(path->max)) <= 0 )
-  {
-    goto cleanup;
-  }
+    if( sysfsval_open(self->cached_max_brightness, path->max_brightness) )
+        sysfsval_refresh(self->cached_max_brightness);
 
-  if( !led_util_open_file(&self->fd_val,   path->val) )
-  {
-    goto cleanup;
-  }
+    if( sysfsval_get(self->cached_max_brightness) <= 0 )
+        goto cleanup;
 
-  res = true;
+    res = true;
 
 cleanup:
 
-  if( !res ) led_channel_redgreen_close(self);
+    /* Always close the max_brightness file */
+    sysfsval_close(self->cached_max_brightness);
 
-  return res;
+    /* On failure close the other files too */
+    if( !res )
+    {
+        sysfsval_close(self->cached_brightness);
+    }
+
+    return res;
 }
 
 static void
-led_channel_redgreen_set_value(const led_channel_redgreen_t *self,
-                                int value)
+led_channel_redgreen_set_value(const led_channel_redgreen_t *self, int value)
 {
-  if( self->fd_val != -1 )
-  {
-    dprintf(self->fd_val, "%d", led_util_scale_value(value, self->maxval));
-  }
+    value = led_util_scale_value(value,
+                                 sysfsval_get(self->cached_max_brightness));
+    sysfsval_set(self->cached_brightness, value);
 }
 
 /* ========================================================================= *
  * ALL_CHANNELS
  * ========================================================================= */
 
+#define REDGREEN_CHANNELS 2
+
 static void
 led_control_redgreen_map_color(int r, int g, int b, int *red, int *green)
 {
-  /* If the pattern defines red and/or green intensities, those should
-   * be used. Otherwise make sure that requesting for blue only colour
-   * does not result in the led being turned off. */
-  if( r || g )
-  {
-    *red   = r;
-    *green = g;
-  }
-  else
-  {
-    *red   = b;
-    *green = b;
-  }
+    /* If the pattern defines red and/or green intensities, those should
+     * be used. Otherwise make sure that requesting for blue only colour
+     * does not result in the led being turned off. */
+    if( r || g )
+    {
+        *red   = r;
+        *green = g;
+    }
+    else
+    {
+        *red   = b;
+        *green = b;
+    }
 }
 
 static void
 led_control_redgreen_value_cb(void *data, int r, int g, int b)
 {
-  const led_channel_redgreen_t *channel = data;
+    const led_channel_redgreen_t *channel = data;
 
-  int red   = 0;
-  int green = 0;
-  led_control_redgreen_map_color(r, g, b, &red, &green);
+    int red   = 0;
+    int green = 0;
+    led_control_redgreen_map_color(r, g, b, &red, &green);
 
-  led_channel_redgreen_set_value(channel + 0, red);
-  led_channel_redgreen_set_value(channel + 1, green);
+    led_channel_redgreen_set_value(channel + 0, red);
+    led_channel_redgreen_set_value(channel + 1, green);
 }
 
 static void
 led_control_redgreen_close_cb(void *data)
 {
-  led_channel_redgreen_t *channel = data;
-  led_channel_redgreen_close(channel + 0);
-  led_channel_redgreen_close(channel + 1);
+    led_channel_redgreen_t *channel = data;
+    led_channel_redgreen_close(channel + 0);
+    led_channel_redgreen_close(channel + 1);
+}
+
+static bool
+led_control_redgreen_static_probe(led_channel_redgreen_t *channel)
+{
+    /** Sysfs control paths for Red + Green leds */
+    static const led_paths_redgreen_t paths[][REDGREEN_CHANNELS] =
+    {
+        // "standard" paths
+        {
+            {
+                .max_brightness   = "/sys/class/leds/red/max_brightness",
+                .brightness       = "/sys/class/leds/red/brightness",
+            },
+            {
+                .max_brightness   = "/sys/class/leds/green/max_brightness",
+                .brightness       = "/sys/class/leds/green/brightness",
+            },
+        },
+    };
+
+    bool ack = false;
+
+    for( size_t i = 0; i < G_N_ELEMENTS(paths); ++i ) {
+        if( led_channel_redgreen_probe(&channel[0], &paths[i][0]) &&
+            led_channel_redgreen_probe(&channel[1], &paths[i][1]) ) {
+            ack = true;
+            break;
+        }
+    }
+
+    return ack;
+}
+
+static bool
+led_control_redgreen_dynamic_probe(led_channel_redgreen_t *channel)
+{
+    /* See inifiles/60-redgreen.ini for example config file */
+    static const objconf_t redgreen_conf[] =
+    {
+        OBJCONF_FILE(led_paths_redgreen_t, brightness,      Brightness),
+        OBJCONF_FILE(led_paths_redgreen_t, max_brightness,  MaxBrightness),
+        OBJCONF_STOP
+    };
+
+    static const char * const pfix[REDGREEN_CHANNELS] =
+    {
+        "Red", "Green",
+    };
+
+    bool ack = false;
+
+    led_paths_redgreen_t paths[REDGREEN_CHANNELS];
+
+    for( size_t i = 0; i < REDGREEN_CHANNELS; ++i )
+        objconf_init(redgreen_conf, &paths[i]);
+
+    for( size_t i = 0; i < REDGREEN_CHANNELS; ++i )
+    {
+        if( !objconf_parse(redgreen_conf, &paths[i], pfix[i]) )
+            goto cleanup;
+
+        if( !led_channel_redgreen_probe(channel+0, &paths[i]) )
+            goto cleanup;
+    }
+
+    ack = true;
+
+cleanup:
+
+    for( size_t i = 0; i < REDGREEN_CHANNELS; ++i )
+        objconf_quit(redgreen_conf, &paths[i]);
+
+    return ack;
 }
 
 bool
 led_control_redgreen_probe(led_control_t *self)
 {
-  /** Sysfs control paths for Red + Green leds */
-  static const led_paths_redgreen_t paths[][2] =
-  {
-    // "standard" paths
-    {
-      {
-        .max   = "/sys/class/leds/red/max_brightness",
-        .val   = "/sys/class/leds/red/brightness",
-      },
-      {
-        .max   = "/sys/class/leds/green/max_brightness",
-        .val   = "/sys/class/leds/green/brightness",
-      },
-    },
-  };
+    static led_channel_redgreen_t channel[REDGREEN_CHANNELS];
 
-  static led_channel_redgreen_t channel[2];
+    bool res = false;
 
-  bool res = false;
+    led_channel_redgreen_init(channel + 0);
+    led_channel_redgreen_init(channel + 1);
 
-  led_channel_redgreen_init(channel + 0);
-  led_channel_redgreen_init(channel + 1);
+    self->name   = "redgreen";
+    self->data   = channel;
+    self->enable = 0;
+    self->value  = led_control_redgreen_value_cb;
+    self->close  = led_control_redgreen_close_cb;
 
-  self->name   = "redgreen";
-  self->data   = channel;
-  self->enable = 0;
-  self->value  = led_control_redgreen_value_cb;
-  self->close  = led_control_redgreen_close_cb;
+    /* We can use sw breathing logic to simulate hw blinking */
+    self->can_breathe = true;
+    self->breath_type = LED_RAMP_HARD_STEP;
 
-  /* We can use sw breathing logic to simulate hw blinking */
-  self->can_breathe = true;
-  self->breath_type = LED_RAMP_HARD_STEP;
+    if( self->use_config )
+        res = led_control_redgreen_dynamic_probe(channel);
 
-  for( size_t i = 0; i < G_N_ELEMENTS(paths) ; ++i )
-  {
-    if( led_channel_redgreen_probe(&channel[0], &paths[i][0]) &&
-        led_channel_redgreen_probe(&channel[1], &paths[i][1]) )
-    {
-      res = true;
-      break;
-    }
-  }
+    if( !res )
+        res = led_control_redgreen_static_probe(channel);
 
-  if( !res )
-  {
-    led_control_close(self);
-  }
+    if( !res )
+        led_control_close(self);
 
-  return res;
+    return res;
 }
