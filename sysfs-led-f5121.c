@@ -123,10 +123,10 @@ led_channel_f5121_probe(led_channel_f5121_t *self,
      * Practically all led control directories have 'brightness'
      * file, most have 'max_brightness' while only some have 'blink'.
      */
-    if( !sysfsval_open(self->cached_blink, path->blink) )
+    if( !sysfsval_open_rw(self->cached_blink, path->blink) )
         goto cleanup;
 
-    if( !sysfsval_open(self->cached_max_brightness, path->max_brightness) )
+    if( !sysfsval_open_ro(self->cached_max_brightness, path->max_brightness) )
         goto cleanup;
 
     /* The 'max_brightness' seems to be dynamic. Make an attempt
@@ -140,7 +140,7 @@ led_channel_f5121_probe(led_channel_f5121_t *self,
     if( sysfsval_get(self->cached_max_brightness) <= 0 )
         goto cleanup;
 
-    if( !sysfsval_open(self->cached_brightness, path->brightness) )
+    if( !sysfsval_open_rw(self->cached_brightness, path->brightness) )
         goto cleanup;
 
     ack = true;

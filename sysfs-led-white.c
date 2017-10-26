@@ -101,10 +101,10 @@ led_channel_white_probe(led_channel_white_t *self,
 {
     bool res = false;
 
-    if( !sysfsval_open(self->cached_brightness, path->brightness) )
+    if( !sysfsval_open_rw(self->cached_brightness, path->brightness) )
         goto cleanup;
 
-    if( !sysfsval_open(self->cached_max_brightness, path->max_brightness) )
+    if( !sysfsval_open_ro(self->cached_max_brightness, path->max_brightness) )
         goto cleanup;
 
     sysfsval_refresh(self->cached_max_brightness);

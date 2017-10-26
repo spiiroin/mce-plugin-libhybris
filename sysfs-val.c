@@ -30,6 +30,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
+#include <errno.h>
 
 /* ========================================================================= *
  * TYPES
@@ -51,7 +52,9 @@ static void        sysfsval_dtor      (sysfsval_t *self);
 
 sysfsval_t        *sysfsval_create    (void);
 void               sysfsval_delete    (sysfsval_t *self);
-bool               sysfsval_open      (sysfsval_t *self, const char *path);
+bool               sysfsval_open_rw   (sysfsval_t *self, const char *path);
+bool               sysfsval_open_ro   (sysfsval_t *self, const char *path);
+static bool        sysfsval_open_ex   (sysfsval_t *self, const char *path, mode_t mode);
 void               sysfsval_close     (sysfsval_t *self);
 const char        *sysfsval_path      (const sysfsval_t *self);
 int                sysfsval_get       (const sysfsval_t *self);
@@ -110,14 +113,32 @@ sysfsval_delete(sysfsval_t *self)
     }
 }
 
-/** Assign path to sysfsval_t object and attempt to open the file
+/** Assign path to sysfsval_t object and open the file in read+write mode
  *
  * @param self sysfsval_t object pointer
  *
  * @return true if file was opened succesfully, false otherwise
  */
 bool
-sysfsval_open(sysfsval_t *self, const char *path)
+sysfsval_open_rw(sysfsval_t *self, const char *path)
+{
+    return sysfsval_open_ex(self, path, O_RDWR);
+}
+
+/** Assign path to sysfsval_t object and open the file in read-only mode
+ *
+ * @param self sysfsval_t object pointer
+ *
+ * @return true if file was opened succesfully, false otherwise
+ */
+bool
+sysfsval_open_ro(sysfsval_t *self, const char *path)
+{
+    return sysfsval_open_ex(self, path, O_RDONLY);
+}
+
+static bool
+sysfsval_open_ex(sysfsval_t *self, const char *path, mode_t mode)
 {
     bool ack = false;
 
@@ -129,8 +150,13 @@ sysfsval_open(sysfsval_t *self, const char *path)
     if( (self->sv_path = strdup(path)) == 0 )
         goto EXIT;
 
-    if( (self->sv_file = open(path, O_RDWR)) == -1 )
+    if( (self->sv_file = open(path, mode)) == -1 ) {
+        if( errno == ENOENT )
+            mce_log(LOG_DEBUG, "%s: open: %m", path);
+        else
+            mce_log(LOG_ERR, "%s: open: %m", path);
         goto EXIT;
+    }
 
     mce_log(LOG_DEBUG, "%s: opened", sysfsval_path(self));
 
