@@ -40,6 +40,7 @@
 #include "plugin-config.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include <glib.h>
 
@@ -235,6 +236,7 @@ led_control_redgreen_dynamic_probe(led_channel_redgreen_t *channel)
 
     led_paths_redgreen_t paths[REDGREEN_CHANNELS];
 
+    memset(paths, 0, sizeof paths);
     for( size_t i = 0; i < REDGREEN_CHANNELS; ++i )
         objconf_init(redgreen_conf, &paths[i]);
 
@@ -243,7 +245,7 @@ led_control_redgreen_dynamic_probe(led_channel_redgreen_t *channel)
         if( !objconf_parse(redgreen_conf, &paths[i], pfix[i]) )
             goto cleanup;
 
-        if( !led_channel_redgreen_probe(channel+0, &paths[i]) )
+        if( !led_channel_redgreen_probe(channel+i, &paths[i]) )
             goto cleanup;
     }
 

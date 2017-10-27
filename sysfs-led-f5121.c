@@ -40,6 +40,7 @@
 #include "plugin-config.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include <glib.h>
 
@@ -324,6 +325,7 @@ led_control_f5121_dynamic_probe(led_channel_f5121_t *channel)
 
   led_paths_f5121_t paths[F5121_CHANNELS];
 
+  memset(paths, 0, sizeof paths);
   for( size_t i = 0; i < F5121_CHANNELS; ++i )
     objconf_init(f5121_conf, &paths[i]);
 
@@ -332,7 +334,7 @@ led_control_f5121_dynamic_probe(led_channel_f5121_t *channel)
     if( !objconf_parse(f5121_conf, &paths[i], pfix[i]) )
       goto cleanup;
 
-    if( !led_channel_f5121_probe(channel+0, &paths[i]) )
+    if( !led_channel_f5121_probe(channel+i, &paths[i]) )
       goto cleanup;
   }
 

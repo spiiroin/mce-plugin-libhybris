@@ -42,6 +42,7 @@
 #include "plugin-config.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include <glib.h>
 
@@ -278,6 +279,7 @@ led_control_htcvision_dynamic_probe(led_channel_htcvision_t *channel)
 
   led_paths_htcvision_t paths[HTCVISION_CHANNELS];
 
+  memset(paths, 0, sizeof paths);
   for( size_t i = 0; i < HTCVISION_CHANNELS; ++i )
     objconf_init(htcvision_conf, &paths[i]);
 
@@ -286,7 +288,7 @@ led_control_htcvision_dynamic_probe(led_channel_htcvision_t *channel)
     if( !objconf_parse(htcvision_conf, &paths[i], pfix[i]) )
       goto cleanup;
 
-    if( !led_channel_htcvision_probe(channel+0, &paths[i]) )
+    if( !led_channel_htcvision_probe(channel+i, &paths[i]) )
       goto cleanup;
   }
 
