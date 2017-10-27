@@ -36,6 +36,7 @@
 #include "plugin-config.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include <glib.h>
 
@@ -101,10 +102,10 @@ led_channel_white_probe(led_channel_white_t *self,
 {
     bool res = false;
 
-    if( !sysfsval_open(self->cached_brightness, path->brightness) )
+    if( !sysfsval_open_rw(self->cached_brightness, path->brightness) )
         goto cleanup;
 
-    if( !sysfsval_open(self->cached_max_brightness, path->max_brightness) )
+    if( !sysfsval_open_ro(self->cached_max_brightness, path->max_brightness) )
         goto cleanup;
 
     sysfsval_refresh(self->cached_max_brightness);
@@ -212,6 +213,7 @@ led_control_white_dynamic_probe(led_channel_white_t *channel)
 
     led_paths_white_t paths[WHITE_CHANNELS];
 
+    memset(paths, 0, sizeof paths);
     for( size_t i = 0; i < WHITE_CHANNELS; ++i )
         objconf_init(white_conf, &paths[i]);
 
@@ -219,7 +221,7 @@ led_control_white_dynamic_probe(led_channel_white_t *channel)
         if( !objconf_parse(white_conf, &paths[i], pfix[i]) )
             goto cleanup;
 
-        if( !led_channel_white_probe(channel+0, &paths[i]) )
+        if( !led_channel_white_probe(channel+i, &paths[i]) )
             goto cleanup;
     }
 

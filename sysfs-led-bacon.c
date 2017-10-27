@@ -40,6 +40,7 @@
 #include "plugin-config.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include <glib.h>
 
@@ -306,6 +307,7 @@ led_control_bacon_dynamic_probe(led_channel_bacon_t *channel)
 
   led_paths_bacon_t paths[BACON_CHANNELS];
 
+  memset(paths, 0, sizeof paths);
   for( size_t i = 0; i < BACON_CHANNELS; ++i )
     objconf_init(bacon_conf, &paths[i]);
 
@@ -314,7 +316,7 @@ led_control_bacon_dynamic_probe(led_channel_bacon_t *channel)
     if( !objconf_parse(bacon_conf, &paths[i], pfix[i]) )
       goto cleanup;
 
-    if( !led_channel_bacon_probe(channel+0, &paths[i]) )
+    if( !led_channel_bacon_probe(channel+i, &paths[i]) )
       goto cleanup;
   }
 

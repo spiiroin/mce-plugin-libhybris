@@ -51,6 +51,7 @@
 #include "plugin-config.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include <glib.h>
 
@@ -137,7 +138,7 @@ led_channel_vanilla_probe(led_channel_vanilla_t *self,
   bool res = false;
 
   // maximum brightness can be read from file or given in config
-  if( sysfsval_open(self->cached_max_brightness, path->max_brightness) )
+  if( sysfsval_open_ro(self->cached_max_brightness, path->max_brightness) )
     sysfsval_refresh(self->cached_max_brightness);
 
   if( path->max_override > 0 )
@@ -147,18 +148,18 @@ led_channel_vanilla_probe(led_channel_vanilla_t *self,
     goto cleanup;
 
   // we always must have brightness control
-  if( !sysfsval_open(self->cached_brightness, path->brightness) )
+  if( !sysfsval_open_rw(self->cached_brightness, path->brightness) )
     goto cleanup;
 
   // on/off period controls are optional, but both
   // are needed if one is present
-  if( sysfsval_open(self->cached_blink_delay_on, path->blink_delay_on) ) {
-    if( !sysfsval_open(self->cached_blink_delay_off, path->blink_delay_off) )
+  if( sysfsval_open_rw(self->cached_blink_delay_on, path->blink_delay_on) ) {
+    if( !sysfsval_open_rw(self->cached_blink_delay_off, path->blink_delay_off) )
       sysfsval_close(self->cached_blink_delay_on);
   }
 
   // having "blink" control file is optional
-  sysfsval_open(self->cached_blink, path->blink);
+  sysfsval_open_rw(self->cached_blink, path->blink);
 
   res = true;
 
@@ -370,6 +371,7 @@ led_control_vanilla_dynamic_probe(led_channel_vanilla_t *channel)
 
   led_paths_vanilla_t paths[VANILLA_CHANNELS];
 
+  memset(paths, 0, sizeof paths);
   for( size_t i = 0; i < VANILLA_CHANNELS; ++i )
     objconf_init(vanilla_conf, &paths[i]);
 
@@ -378,7 +380,7 @@ led_control_vanilla_dynamic_probe(led_channel_vanilla_t *channel)
     if( !objconf_parse(vanilla_conf, &paths[i], pfix[i]) )
       goto cleanup;
 
-    if( !led_channel_vanilla_probe(channel+0, &paths[i]) )
+    if( !led_channel_vanilla_probe(channel+i, &paths[i]) )
       goto cleanup;
   }
 

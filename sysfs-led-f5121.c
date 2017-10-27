@@ -40,6 +40,7 @@
 #include "plugin-config.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include <glib.h>
 
@@ -123,10 +124,10 @@ led_channel_f5121_probe(led_channel_f5121_t *self,
      * Practically all led control directories have 'brightness'
      * file, most have 'max_brightness' while only some have 'blink'.
      */
-    if( !sysfsval_open(self->cached_blink, path->blink) )
+    if( !sysfsval_open_rw(self->cached_blink, path->blink) )
         goto cleanup;
 
-    if( !sysfsval_open(self->cached_max_brightness, path->max_brightness) )
+    if( !sysfsval_open_ro(self->cached_max_brightness, path->max_brightness) )
         goto cleanup;
 
     /* The 'max_brightness' seems to be dynamic. Make an attempt
@@ -140,7 +141,7 @@ led_channel_f5121_probe(led_channel_f5121_t *self,
     if( sysfsval_get(self->cached_max_brightness) <= 0 )
         goto cleanup;
 
-    if( !sysfsval_open(self->cached_brightness, path->brightness) )
+    if( !sysfsval_open_rw(self->cached_brightness, path->brightness) )
         goto cleanup;
 
     ack = true;
@@ -324,6 +325,7 @@ led_control_f5121_dynamic_probe(led_channel_f5121_t *channel)
 
   led_paths_f5121_t paths[F5121_CHANNELS];
 
+  memset(paths, 0, sizeof paths);
   for( size_t i = 0; i < F5121_CHANNELS; ++i )
     objconf_init(f5121_conf, &paths[i]);
 
@@ -332,7 +334,7 @@ led_control_f5121_dynamic_probe(led_channel_f5121_t *channel)
     if( !objconf_parse(f5121_conf, &paths[i], pfix[i]) )
       goto cleanup;
 
-    if( !led_channel_f5121_probe(channel+0, &paths[i]) )
+    if( !led_channel_f5121_probe(channel+i, &paths[i]) )
       goto cleanup;
   }
 

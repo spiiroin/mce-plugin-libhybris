@@ -42,6 +42,7 @@
 #include "plugin-config.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include <glib.h>
 
@@ -115,13 +116,13 @@ led_channel_htcvision_probe(led_channel_htcvision_t *self,
 {
   bool res = false;
 
-  if( !sysfsval_open(self->cached_blink, path->blink) )
+  if( !sysfsval_open_rw(self->cached_blink, path->blink) )
     goto cleanup;
 
-  if( !sysfsval_open(self->cached_brightness, path->brightness) )
+  if( !sysfsval_open_rw(self->cached_brightness, path->brightness) )
     goto cleanup;
 
-  if( sysfsval_open(self->cached_max_brightness, path->max_brightness) )
+  if( sysfsval_open_ro(self->cached_max_brightness, path->max_brightness) )
     sysfsval_refresh(self->cached_max_brightness);
 
   if( sysfsval_get(self->cached_max_brightness) <= 0 )
@@ -278,6 +279,7 @@ led_control_htcvision_dynamic_probe(led_channel_htcvision_t *channel)
 
   led_paths_htcvision_t paths[HTCVISION_CHANNELS];
 
+  memset(paths, 0, sizeof paths);
   for( size_t i = 0; i < HTCVISION_CHANNELS; ++i )
     objconf_init(htcvision_conf, &paths[i]);
 
@@ -286,7 +288,7 @@ led_control_htcvision_dynamic_probe(led_channel_htcvision_t *channel)
     if( !objconf_parse(htcvision_conf, &paths[i], pfix[i]) )
       goto cleanup;
 
-    if( !led_channel_htcvision_probe(channel+0, &paths[i]) )
+    if( !led_channel_htcvision_probe(channel+i, &paths[i]) )
       goto cleanup;
   }
 

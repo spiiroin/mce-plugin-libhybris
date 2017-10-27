@@ -40,6 +40,7 @@
 #include "plugin-config.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include <glib.h>
 
@@ -105,10 +106,10 @@ led_channel_redgreen_probe(led_channel_redgreen_t *self,
 {
     bool res = false;
 
-    if( !sysfsval_open(self->cached_brightness, path->brightness) )
+    if( !sysfsval_open_rw(self->cached_brightness, path->brightness) )
         goto cleanup;
 
-    if( sysfsval_open(self->cached_max_brightness, path->max_brightness) )
+    if( sysfsval_open_ro(self->cached_max_brightness, path->max_brightness) )
         sysfsval_refresh(self->cached_max_brightness);
 
     if( sysfsval_get(self->cached_max_brightness) <= 0 )
@@ -235,6 +236,7 @@ led_control_redgreen_dynamic_probe(led_channel_redgreen_t *channel)
 
     led_paths_redgreen_t paths[REDGREEN_CHANNELS];
 
+    memset(paths, 0, sizeof paths);
     for( size_t i = 0; i < REDGREEN_CHANNELS; ++i )
         objconf_init(redgreen_conf, &paths[i]);
 
@@ -243,7 +245,7 @@ led_control_redgreen_dynamic_probe(led_channel_redgreen_t *channel)
         if( !objconf_parse(redgreen_conf, &paths[i], pfix[i]) )
             goto cleanup;
 
-        if( !led_channel_redgreen_probe(channel+0, &paths[i]) )
+        if( !led_channel_redgreen_probe(channel+i, &paths[i]) )
             goto cleanup;
     }
 

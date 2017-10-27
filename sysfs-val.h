@@ -38,7 +38,8 @@ typedef struct sysfsval_t sysfsval_t;
 
 sysfsval_t        *sysfsval_create    (void);
 void               sysfsval_delete    (sysfsval_t *self);
-bool               sysfsval_open      (sysfsval_t *self, const char *path);
+bool               sysfsval_open_rw   (sysfsval_t *self, const char *path);
+bool               sysfsval_open_ro   (sysfsval_t *self, const char *path);
 void               sysfsval_close     (sysfsval_t *self);
 const char        *sysfsval_path      (const sysfsval_t *self);
 int                sysfsval_get       (const sysfsval_t *self);
