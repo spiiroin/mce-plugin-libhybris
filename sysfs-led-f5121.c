@@ -193,7 +193,11 @@ led_channel_f5121_set_value(led_channel_f5121_t *self,
      * the steps.
      */
     if( self->control_blink ) {
+#if 0 // default: enabling blink equals brightness=255
         sysfsval_set(self->cached_brightness, 0);
+#else // fp2 quirk: enabling blink ignored if brightness==0
+        sysfsval_set(self->cached_brightness, 255);
+#endif
         sysfsval_set(self->cached_blink, 1);
     }
     else {
