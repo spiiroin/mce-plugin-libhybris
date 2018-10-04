@@ -27,7 +27,9 @@
 #include "plugin-api.h"
 
 #include <system/window.h>
+#include <hardware/gralloc.h>
 #include <hardware/fb.h>
+#include <hardware/hwcomposer.h>
 
 /* ========================================================================= *
  * PROTOTYPES
@@ -39,9 +41,6 @@
 
 bool        hybris_plugin_fb_load         (void);
 void        hybris_plugin_fb_unload       (void);
-
-static int  hybris_plugin_fb_open_device  (struct framebuffer_device_t **pdevice);
-static void hybris_plugin_fb_close_device (struct framebuffer_device_t **pdevice);
 
 /* ------------------------------------------------------------------------- *
  * FRAMEBUFFER_DEVICE
@@ -58,6 +57,9 @@ bool        hybris_device_fb_set_power    (bool state);
 /** Handle for libhybris framebuffer plugin */
 static const  struct hw_module_t *hybris_plugin_fb_handle = 0;
 
+/** Handle for libhybris hw composer plugin */
+static const  struct hw_module_t *hybris_plugin_hwc_handle = 0;
+
 /** Load libhybris framebuffer plugin
  *
  * @return true on success, false on failure
@@ -73,19 +75,25 @@ hybris_plugin_fb_load(void)
 
   done = true;
 
-  hw_get_module(GRALLOC_HARDWARE_FB0, &hybris_plugin_fb_handle);
-
+  /* Load framebuffer module */
+  hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &hybris_plugin_fb_handle);
   if( !hybris_plugin_fb_handle ) {
-    mce_log(LL_WARN, "failed to open frame buffer module");
-    goto cleanup;
+    mce_log(LL_DEBUG, "failed to open frame buffer module");
   }
 
-  mce_log(LL_DEBUG, "hybris_plugin_fb_handle = %p",
-          hybris_plugin_fb_handle);
+  /* Load hw composer module */
+  hw_get_module(HWC_HARDWARE_MODULE_ID, &hybris_plugin_hwc_handle);
+  if( !hybris_plugin_hwc_handle ) {
+    mce_log(LL_DEBUG, "failed to open hw composer module");
+  }
+
+  /* Both fb and hwc are optional, but having neither is unexpected */
+  if( !hybris_plugin_fb_handle && !hybris_plugin_hwc_handle ) {
+    mce_log(LL_WARN, "could not open neither fb nor hwc module");
+  }
 
 cleanup:
-
-  return hybris_plugin_fb_handle != 0;
+  return hybris_plugin_fb_handle || hybris_plugin_hwc_handle;
 }
 
 /** Unload libhybris framebuffer plugin
@@ -93,55 +101,13 @@ cleanup:
 void
 hybris_plugin_fb_unload(void)
 {
-  /* Close devices related to the plugin */
+  /* Close open devices */
   hybris_device_fb_quit();
 
-  /* actually unload the module */
+  /* Unload modules */
   // FIXME: how to unload libhybris modules?
-}
-
-/** Convenience function for opening frame buffer device
- *
- * Similar to what we might or might not have available from hardware/fb.h
- */
-static int
-hybris_plugin_fb_open_device(struct framebuffer_device_t ** pdevice)
-{
-  int ack = false;
-
-  if( !hybris_plugin_fb_load() ) {
-    goto cleanup;
-  }
-
-  const struct hw_module_t *mod = hybris_plugin_fb_handle;
-  const char               *id  = GRALLOC_HARDWARE_FB0;
-  struct hw_device_t       *dev = 0;
-
-  if( !mod->methods->open(mod, id, &dev) ) {
-    goto cleanup;
-  }
-
-  *pdevice = (struct framebuffer_device_t*)dev;
-
-  ack = true;
-
-cleanup:
-
-  return ack;
-}
-
-/** Convenience function for closing frame buffer device
- *
- * Similar to what we might or might not have available from hardware/fb.h
- */
-static void
-hybris_plugin_fb_close_device(struct framebuffer_device_t **pdevice)
-{
-  struct framebuffer_device_t *device;
-
-  if( (device = *pdevice) ) {
-    *pdevice = 0, device->common.close(&device->common);
-  }
+  hybris_plugin_fb_handle = 0;
+  hybris_plugin_hwc_handle = 0;
 }
 
 /* ========================================================================= *
@@ -149,7 +115,10 @@ hybris_plugin_fb_close_device(struct framebuffer_device_t **pdevice)
  * ========================================================================= */
 
 /** Pointer to libhybris frame buffer device object */
-static struct framebuffer_device_t *hybris_device_fb_handle = 0;
+static framebuffer_device_t *hybris_device_fb_handle = 0;
+
+/** Pointer to libhybris frame buffer device object */
+static hwc_composer_device_1_t *hybris_device_hwc_handle = 0;
 
 /** Initialize libhybris frame buffer device object
  *
@@ -158,6 +127,7 @@ static struct framebuffer_device_t *hybris_device_fb_handle = 0;
 bool
 hybris_device_fb_init(void)
 {
+  static bool ack = false;
   static bool done = false;
 
   if( done ) {
@@ -166,19 +136,68 @@ hybris_device_fb_init(void)
 
   done = true;
 
-  hybris_plugin_fb_open_device(&hybris_device_fb_handle);
-
-  if( !hybris_device_fb_handle ) {
-    mce_log(LL_ERR, "failed to open framebuffer device");
+  if( !hybris_plugin_fb_load() ) {
     goto cleanup;
   }
 
-  mce_log(LL_DEBUG, "hybris_device_fb_handle = %p",
-          hybris_device_fb_handle);
+  /* Open frame buffer device */
+  if( hybris_plugin_fb_handle ) {
+    hybris_plugin_fb_handle->methods->open(hybris_plugin_fb_handle,
+                                           GRALLOC_HARDWARE_FB0,
+                                           (hw_device_t**)&hybris_device_fb_handle);
+    if( !hybris_device_fb_handle ) {
+      mce_log(LL_WARN, "failed to open frame buffer device");
+    }
+  }
+
+  /* Open hw composer device */
+  if( hybris_plugin_hwc_handle ) {
+    hybris_plugin_hwc_handle->methods->open(hybris_plugin_hwc_handle,
+                                            HWC_HARDWARE_COMPOSER,
+                                            (hw_device_t**)&hybris_device_hwc_handle);
+    if( !hybris_device_hwc_handle ) {
+      mce_log(LL_WARN, "failed to open hw composer device");
+    }
+  }
+
+  /* What we'd like to use is:
+   *
+   * 1. hwc_dev->setPowerMode()
+   * 2. hwc_dev->blank()
+   * 2. fb_dev->enableScreen()
+   *
+   * While all are optional, having none available is unexpected.
+   */
+
+  if( hybris_device_hwc_handle ) {
+#ifdef HWC_DEVICE_API_VERSION_1_4
+    if( hybris_device_hwc_handle->common.version >= HWC_DEVICE_API_VERSION_1_4 &&
+        hybris_device_hwc_handle->setPowerMode ) {
+      mce_log(LL_DEBUG, "using hw composer setPowerMode() method");
+      ack = true;
+      goto cleanup;
+    }
+#endif
+    if( hybris_device_hwc_handle->blank ) {
+      mce_log(LL_DEBUG, "using hw composer blank() method");
+      ack = true;
+      goto cleanup;
+    }
+  }
+
+  if( hybris_device_fb_handle ) {
+    if( hybris_device_fb_handle->enableScreen ) {
+      mce_log(LL_DEBUG, "using framebuffer enableScreen() method");
+      ack = true;
+      goto cleanup;
+    }
+  }
+
+  mce_log(LL_WARN, "no known display power control interfaces");
 
 cleanup:
 
-  return hybris_device_fb_handle != 0;
+  return ack;
 }
 
 /** Release libhybris frame buffer device object
@@ -186,7 +205,15 @@ cleanup:
 void
 hybris_device_fb_quit(void)
 {
-  hybris_plugin_fb_close_device(&hybris_device_fb_handle);
+  if( hybris_device_hwc_handle ) {
+    hybris_device_hwc_handle->common.close(&hybris_device_hwc_handle->common);
+    hybris_device_hwc_handle = 0;
+  }
+
+  if( hybris_device_fb_handle ) {
+    hybris_device_fb_handle->common.close(&hybris_device_fb_handle->common);
+    hybris_device_fb_handle = 0;
+  }
 }
 
 /** Set frame buffer power state via libhybris
@@ -204,11 +231,47 @@ hybris_device_fb_set_power(bool state)
     goto cleanup;
   }
 
-  if( hybris_device_fb_handle->enableScreen(hybris_device_fb_handle, state) < 0 ) {
-    goto cleanup;
+  /* Try hwc methods */
+  if( hybris_device_hwc_handle ) {
+#ifdef HWC_DEVICE_API_VERSION_1_4
+    if( hybris_device_hwc_handle->common.version >= HWC_DEVICE_API_VERSION_1_4 &&
+        hybris_device_hwc_handle->setPowerMode ) {
+      int disp = 0;
+      int mode = state ? HWC_POWER_MODE_NORMAL : HWC_POWER_MODE_OFF;
+      int err = hybris_device_hwc_handle->setPowerMode(hybris_device_hwc_handle,
+                                                       disp, mode);
+      mce_log(err ? LL_WARN : LL_DEBUG, "setPowerMode(%d, %d) -> err=%d ",
+              disp, mode, err);
+      ack = !err;
+      goto cleanup;
+    }
+#endif
+    if( hybris_device_hwc_handle->blank ) {
+      int disp = 0;
+      int blank = state ? false : true;
+      int err = hybris_device_hwc_handle->blank(hybris_device_hwc_handle,
+                                                disp, blank);
+      mce_log(err ? LL_WARN : LL_DEBUG, "blank(%d, %d) -> err=%d ",
+              disp, blank, err);
+      ack = !err;
+      goto cleanup;
+    }
   }
 
-  ack = true;
+  /* Try fb methods */
+  if( hybris_device_fb_handle ) {
+    if( hybris_device_fb_handle->enableScreen ) {
+      int err = hybris_device_fb_handle->enableScreen(hybris_device_fb_handle,
+                                                      state);
+      mce_log(err ? LL_WARN : LL_DEBUG, "enableScreen(%d) -> err=%d ",
+              state, err);
+      ack = !err;
+      goto cleanup;
+    }
+  }
+
+  /* Failed */
+  mce_log(LL_WARN, "no known display power control interfaces");
 
 cleanup:
 
