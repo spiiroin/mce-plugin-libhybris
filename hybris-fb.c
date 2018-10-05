@@ -82,10 +82,18 @@ hybris_plugin_fb_load(void)
   }
 
   /* Load hw composer module */
+#ifdef HWC_DEVICE_API_VERSION_1_0
   hw_get_module(HWC_HARDWARE_MODULE_ID, &hybris_plugin_hwc_handle);
   if( !hybris_plugin_hwc_handle ) {
     mce_log(LL_DEBUG, "failed to open hw composer module");
   }
+#else
+  /* When compiling with really old hwcompser.h in place, assume
+   * that the target device is not going to have the hwc methods we
+   * are interested in -> skip module load -> hwc device loading and
+   * related cleanup turns into a nop without further #ifdeffing.
+   */
+#endif
 
   /* Both fb and hwc are optional, but having neither is unexpected */
   if( !hybris_plugin_fb_handle && !hybris_plugin_hwc_handle ) {
@@ -118,7 +126,11 @@ hybris_plugin_fb_unload(void)
 static framebuffer_device_t *hybris_device_fb_handle = 0;
 
 /** Pointer to libhybris frame buffer device object */
+#ifdef HWC_DEVICE_API_VERSION_1_0
 static hwc_composer_device_1_t *hybris_device_hwc_handle = 0;
+#else
+static hwc_composer_device_t *hybris_device_hwc_handle = 0;
+#endif
 
 /** Initialize libhybris frame buffer device object
  *
@@ -169,21 +181,23 @@ hybris_device_fb_init(void)
    * While all are optional, having none available is unexpected.
    */
 
+#ifdef HWC_DEVICE_API_VERSION_1_0
   if( hybris_device_hwc_handle ) {
-#ifdef HWC_DEVICE_API_VERSION_1_4
+# ifdef HWC_DEVICE_API_VERSION_1_4
     if( hybris_device_hwc_handle->common.version >= HWC_DEVICE_API_VERSION_1_4 &&
         hybris_device_hwc_handle->setPowerMode ) {
       mce_log(LL_DEBUG, "using hw composer setPowerMode() method");
       ack = true;
       goto cleanup;
     }
-#endif
+# endif
     if( hybris_device_hwc_handle->blank ) {
       mce_log(LL_DEBUG, "using hw composer blank() method");
       ack = true;
       goto cleanup;
     }
   }
+#endif
 
   if( hybris_device_fb_handle ) {
     if( hybris_device_fb_handle->enableScreen ) {
@@ -232,8 +246,9 @@ hybris_device_fb_set_power(bool state)
   }
 
   /* Try hwc methods */
+#ifdef HWC_DEVICE_API_VERSION_1_0
   if( hybris_device_hwc_handle ) {
-#ifdef HWC_DEVICE_API_VERSION_1_4
+# ifdef HWC_DEVICE_API_VERSION_1_4
     if( hybris_device_hwc_handle->common.version >= HWC_DEVICE_API_VERSION_1_4 &&
         hybris_device_hwc_handle->setPowerMode ) {
       int disp = 0;
@@ -245,7 +260,7 @@ hybris_device_fb_set_power(bool state)
       ack = !err;
       goto cleanup;
     }
-#endif
+# endif
     if( hybris_device_hwc_handle->blank ) {
       int disp = 0;
       int blank = state ? false : true;
@@ -257,6 +272,7 @@ hybris_device_fb_set_power(bool state)
       goto cleanup;
     }
   }
+#endif
 
   /* Try fb methods */
   if( hybris_device_fb_handle ) {
