@@ -43,6 +43,9 @@
 /** Optional enable/disable sw breathing setting */
 #define MCE_CONF_LED_CONFIG_HYBRIS_BREATHING "QuirkBreathing"
 
+/** Optional sw breathing type setting */
+#define MCE_CONF_LED_CONFIG_HYBRIS_BREATH_TYPE "QuirkBreathType"
+
 gchar * plugin_config_get_string(const gchar *group, const gchar *key, const gchar *defaultval);
 
 typedef enum

@@ -331,6 +331,10 @@ led_control_probe(led_control_t *self)
 
     self->can_breathe = QUIRK(QUIRK_BREATHING, self->can_breathe);
 
+    if( self->can_breathe ) {
+      self->breath_type = QUIRK(QUIRK_BREATH_TYPE, self->breath_type);
+    }
+
     ack = true;
     break;
   }

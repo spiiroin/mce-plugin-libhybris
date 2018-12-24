@@ -39,6 +39,9 @@ typedef enum
     /** Override sw breathing desicion made by led backend */
     QUIRK_BREATHING,
 
+    /** Override sw breathing type set by led backend */
+    QUIRK_BREATH_TYPE,
+
     /** Number of quirks */
     QUIRK_COUNT
 } quirk_t;

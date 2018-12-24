@@ -49,7 +49,8 @@ static const char * const quirk_false_lut[] =
 /** Quirk enum id to settings ini-file key lookup table */
 static const char * const quirk_name_lut[QUIRK_COUNT] =
 {
-    [QUIRK_BREATHING] = MCE_CONF_LED_CONFIG_HYBRIS_BREATHING,
+    [QUIRK_BREATHING]   = MCE_CONF_LED_CONFIG_HYBRIS_BREATHING,
+    [QUIRK_BREATH_TYPE] = MCE_CONF_LED_CONFIG_HYBRIS_BREATH_TYPE,
 };
 
 /** Flag array for: quirk setting has been defined in mce config */
