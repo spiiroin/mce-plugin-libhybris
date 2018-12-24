@@ -127,7 +127,11 @@ void mce_hybris_quit                      (void);
 bool
 mce_hybris_framebuffer_init(void)
 {
+#ifdef ENABLE_HYBRIS_SUPPORT
   return hybris_device_fb_init();
+#else
+  return false;
+#endif
 }
 
 /** Release libhybris frame buffer device object
@@ -135,7 +139,9 @@ mce_hybris_framebuffer_init(void)
 void
 mce_hybris_framebuffer_quit(void)
 {
+#ifdef ENABLE_HYBRIS_SUPPORT
   hybris_device_fb_quit();
+#endif
 }
 
 /** Set frame buffer power state via libhybris
@@ -147,7 +153,12 @@ mce_hybris_framebuffer_quit(void)
 bool
 mce_hybris_framebuffer_set_power(bool state)
 {
+#ifdef ENABLE_HYBRIS_SUPPORT
   return hybris_device_fb_set_power(state);
+#else
+  (void)state;
+  return false;
+#endif
 }
 
 /* ========================================================================= *
@@ -161,7 +172,11 @@ mce_hybris_framebuffer_set_power(bool state)
 bool
 mce_hybris_backlight_init(void)
 {
+#ifdef ENABLE_HYBRIS_SUPPORT
   return hybris_device_backlight_init();
+#else
+  return false;
+#endif
 }
 
 /** Release libhybris display backlight device object
@@ -169,7 +184,9 @@ mce_hybris_backlight_init(void)
 void
 mce_hybris_backlight_quit(void)
 {
+#ifdef ENABLE_HYBRIS_SUPPORT
   hybris_device_backlight_quit();
+#endif
 }
 
 /** Set display backlight brightness via libhybris
@@ -181,7 +198,12 @@ mce_hybris_backlight_quit(void)
 bool
 mce_hybris_backlight_set_brightness(int level)
 {
+#ifdef ENABLE_HYBRIS_SUPPORT
   return hybris_device_backlight_set_brightness(level);
+#else
+  (void)level;
+  return false;
+#endif
 }
 
 /* ========================================================================= *
@@ -195,7 +217,11 @@ mce_hybris_backlight_set_brightness(int level)
 bool
 mce_hybris_keypad_init(void)
 {
+#ifdef ENABLE_HYBRIS_SUPPORT
   return hybris_device_keypad_init();
+#else
+  return false;
+#endif
 }
 
 /** Release libhybris keypad backlight device object
@@ -203,7 +229,9 @@ mce_hybris_keypad_init(void)
 void
 mce_hybris_keypad_quit(void)
 {
+#ifdef ENABLE_HYBRIS_SUPPORT
   hybris_device_keypad_quit();
+#endif
 }
 
 /** Set display keypad brightness via libhybris
@@ -215,7 +243,12 @@ mce_hybris_keypad_quit(void)
 bool
 mce_hybris_keypad_set_brightness(int level)
 {
+#ifdef ENABLE_HYBRIS_SUPPORT
   return hybris_device_keypad_set_brightness(level);
+#else
+  (void)level;
+  return false;
+#endif
 }
 
 /* ========================================================================= *
@@ -258,9 +291,15 @@ mce_hybris_indicator_init(void)
   if( sysfs_led_init() ) {
     mce_hybris_indicator_uses_sysfs = true;
   }
+#ifdef ENABLE_HYBRIS_SUPPORT
   else if( !hybris_device_indicator_init() ) {
     goto  cleanup;
   }
+#else
+  else {
+    goto cleanup;
+  }
+#endif
 
   ack = true;
 
@@ -280,10 +319,12 @@ mce_hybris_indicator_quit(void)
     /* Release sysfs controls */
     sysfs_led_quit();
   }
+#ifdef ENABLE_HYBRIS_SUPPORT
   else {
     /* Release libhybris controls */
     hybris_device_indicator_quit();
   }
+#endif
 }
 
 /** Set indicator led pattern via libhybris
@@ -329,9 +370,11 @@ mce_hybris_indicator_set_pattern(int r, int g, int b, int ms_on, int ms_off)
   if( mce_hybris_indicator_uses_sysfs ) {
     ack = sysfs_led_set_pattern(r, g, b, ms_on, ms_off);
   }
+#ifdef ENABLE_HYBRIS_SUPPORT
   else {
     ack = hybris_device_indicator_set_pattern(r, g, b, ms_on, ms_off);
   }
+#endif
 
   mce_log(LL_DEBUG, "pattern(%d,%d,%d,%d,%d) -> %s",
           r,g,b, ms_on, ms_off , ack ? "success" : "failure");
@@ -420,7 +463,11 @@ mce_hybris_indicator_set_brightness(int level)
 bool
 mce_hybris_ps_init(void)
 {
+#ifdef ENABLE_HYBRIS_SUPPORT
   return hybris_sensor_ps_init();
+#else
+  return false;
+#endif
 }
 
 /** Stop using proximity sensor via libhybris
@@ -430,7 +477,9 @@ mce_hybris_ps_init(void)
 void
 mce_hybris_ps_quit(void)
 {
+#ifdef ENABLE_HYBRIS_SUPPORT
   hybris_sensor_ps_quit();
+#endif
 }
 
 /** Set proximity sensort input enabled state
@@ -440,7 +489,12 @@ mce_hybris_ps_quit(void)
 bool
 mce_hybris_ps_set_active(bool state)
 {
+#ifdef ENABLE_HYBRIS_SUPPORT
   return hybris_sensor_ps_set_active(state);
+#else
+  (void)state;
+  return false;
+#endif
 }
 
 /** Set callback function for handling proximity sensor events
@@ -450,7 +504,11 @@ mce_hybris_ps_set_active(bool state)
 void
 mce_hybris_ps_set_hook(mce_hybris_ps_fn cb)
 {
+#ifdef ENABLE_HYBRIS_SUPPORT
   hybris_sensor_ps_set_hook(cb);
+#else
+  (void)cb;
+#endif
 }
 
 /* ========================================================================= *
@@ -464,7 +522,11 @@ mce_hybris_ps_set_hook(mce_hybris_ps_fn cb)
 bool
 mce_hybris_als_init(void)
 {
+#ifdef ENABLE_HYBRIS_SUPPORT
   return hybris_device_als_init();
+#else
+  return false;
+#endif
 }
 
 /** Stop using ambient light sensor via libhybris
@@ -474,7 +536,9 @@ mce_hybris_als_init(void)
 void
 mce_hybris_als_quit(void)
 {
+#ifdef ENABLE_HYBRIS_SUPPORT
   hybris_device_als_quit();
+#endif
 }
 
 /** Set ambient light sensor input enabled state
@@ -484,7 +548,12 @@ mce_hybris_als_quit(void)
 bool
 mce_hybris_als_set_active(bool state)
 {
+#ifdef ENABLE_HYBRIS_SUPPORT
   return hybris_device_als_set_active(state);
+#else
+  (void)state;
+  return false;
+#endif
 }
 
 /** Set callback function for handling ambient light sensor events
@@ -494,7 +563,11 @@ mce_hybris_als_set_active(bool state)
 void
 mce_hybris_als_set_hook(mce_hybris_als_fn cb)
 {
+#ifdef ENABLE_HYBRIS_SUPPORT
   hybris_device_als_set_hook(cb);
+#else
+  (void)cb;
+#endif
 }
 
 /* ========================================================================= *
@@ -506,7 +579,9 @@ mce_hybris_als_set_hook(mce_hybris_als_fn cb)
 void
 mce_hybris_quit(void)
 {
+#ifdef ENABLE_HYBRIS_SUPPORT
   hybris_plugin_fb_unload();
   hybris_plugin_lights_unload();
   hybris_plugin_sensors_unload();
+#endif
 }

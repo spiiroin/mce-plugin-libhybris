@@ -4,9 +4,20 @@
 
 NAME    ?= mce-plugin-libhybris
 
-DESTDIR ?= /tmp/test-install-$(NAME)
+## QUARANTINE DESTDIR ?= /tmp/test-install-$(NAME)
+DESTDIR ?= /tmp/test-mce-install
 
 _LIBDIR ?= /usr/lib
+
+# ----------------------------------------------------------------------------
+# CONFIG
+# ----------------------------------------------------------------------------
+
+ENABLE_HYBRIS_SUPPPORT ?= n
+
+ifeq ($(strip $(ENABLE_HYBRIS_SUPPORT)),y)
+CPPFLAGS += -DENABLE_HYBRIS_SUPPORT
+endif
 
 # ----------------------------------------------------------------------------
 # List of targets to build
@@ -64,8 +75,8 @@ LDLIBS   += -lpthread
 # ----------------------------------------------------------------------------
 
 PKG_NAMES += glib-2.0
-PKG_NAMES += libhardware
-PKG_NAMES += android-headers
+## QUARANTINE PKG_NAMES += libhardware
+## QUARANTINE PKG_NAMES += android-headers
 
 maintenance  = normalize clean distclean mostlyclean
 intersection = $(strip $(foreach w,$1, $(filter $w,$2)))
@@ -114,10 +125,12 @@ locals: $(patsubst %.c,%.i,$(wildcard *.c))
 # Explicit dependencies
 # ----------------------------------------------------------------------------
 
+ifeq ($(ENABLE_HYBRIS_SUPPORT),y)
 hybris_OBJS += hybris-fb.pic.o
 hybris_OBJS += hybris-lights.pic.o
 hybris_OBJS += hybris-sensors.pic.o
 hybris_OBJS += hybris-thread.pic.o
+endif
 hybris_OBJS += plugin-api.pic.o
 hybris_OBJS += plugin-config.pic.o
 hybris_OBJS += plugin-logging.pic.o
@@ -134,7 +147,10 @@ hybris_OBJS += sysfs-led-vanilla.pic.o
 hybris_OBJS += sysfs-led-white.pic.o
 hybris_OBJS += sysfs-val.pic.o
 
-hybris.so : LDLIBS += -lhardware -lm
+ifeq ($(ENABLE_HYBRIS_SUPPORT),y)
+hybris.so : LDLIBS += -lhardware
+endif
+hybris.so : LDLIBS += -lm
 hybris.so : $(hybris_OBJS)
 
 install:: hybris.so

@@ -1,0 +1,63 @@
+#!/usr/bin/make -f
+# debian/rules for mce-plugin-libhybris using debhelper.
+# Copyright © 2004-2011 Nokia Corporation and/or its subsidiary(-ies).
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# This has to be exported to make some magic below work.
+export DH_OPTIONS
+
+.PHONY: clean
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp
+
+	$(MAKE) distclean
+
+	dh_clean
+
+.PHONY: check
+check:
+
+build-stamp:
+	dh_testdir
+	$(MAKE)
+
+	touch build-stamp
+
+.PHONY: build
+build: check build-stamp
+
+.PHONY: install
+install:
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+	$(MAKE) install DESTDIR=debian/mce-plugin-libhybris
+
+.PHONY: binary-indep
+binary-indep:
+
+.PHONY: binary-arch
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_installdocs
+	dh_installman
+	dh_installchangelogs
+	dh_install -s
+	dh_strip -pmce-plugin-libhybris --dbg-package=mce-plugin-libhybris-dbg
+	dh_link
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+.PHONY: binary
+binary: binary-indep binary-arch

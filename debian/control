@@ -1,0 +1,27 @@
+Source: mce-plugin-libhybris
+Section: misc
+Priority: optional
+Maintainer: Simo Piiroinen <simo.piiroinen@jollamobile.com>
+Uploaders: Simo Piiroinen <simo.piiroinen@jollamobile.com>
+Build-Depends:
+ debhelper (>= 5.0.0),
+ pkg-config,
+ dpkg-dev (>= 1.13.19)
+Standards-Version: 3.8.4
+
+Package: mce-plugin-libhybris
+Architecture: any
+Depends: dbus, ${shlibs:Depends}, ${misc:Depends}
+Recommends: dsme (>= 0.30.11), devicelock (>= 0.3.3), sysinfo-dbus | sysinfod (= 1.0.20)
+Description: the Mode Control Entity for Nokia mobile computers
+ This package contains the Mode Control Entity which provides
+ mode management features.  This is a daemon that is the backend
+ for many features on Nokia's mobile computers.
+
+Package: mce-plugin-libhybris-dbg
+Section: devel
+Priority: extra
+Architecture: any
+Depends: mce-plugin-libhybris (= ${binary:Version}), ${misc:Depends}
+Description: debug symbols for mce-plugin-libhybris
+ This package contains the debug symbols for the Mode Control Entity.
