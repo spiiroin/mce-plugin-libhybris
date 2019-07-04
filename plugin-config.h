@@ -45,9 +45,24 @@
 
 gchar * plugin_config_get_string(const gchar *group, const gchar *key, const gchar *defaultval);
 
+typedef enum
+{
+    /** Item is not valid / is a sentinel */
+    CONFTYPE_NONE,
+
+    /** Item is a file path */
+    CONFTYPE_FILE,
+
+    /** Item is a standalone string value */
+    CONFTYPE_STRING,
+} conftype_t;
+
 /** Inifile to object member mapping info */
 typedef struct
 {
+    /** Type of configuration value */
+    conftype_t  type;
+
     /** Ini-file key */
     const char *key;
 
@@ -61,7 +76,17 @@ typedef struct
 /** Object configuration entry sentinel */
 #define OBJCONF_STOP \
      {\
-         .key = 0,\
+         .type = CONFTYPE_NONE,\
+     }
+
+/** Object configuration entry for standalone string value
+ */
+#define OBJCONF_STRING(obj_,memb_,key_,def_)\
+     {\
+         .type = CONFTYPE_STRING,\
+         .key = #key_,\
+         .def = def_,\
+         .off = offsetof(obj_,memb_),\
      }
 
 /** Object configuration entry for file path
@@ -70,6 +95,7 @@ typedef struct
  */
 #define OBJCONF_FILE(obj_,memb_,key_)\
      {\
+         .type = CONFTYPE_FILE,\
          .key = #key_,\
          .def = #memb_,\
          .off = offsetof(obj_,memb_),\
@@ -81,6 +107,7 @@ typedef struct
  */
 #define OBJCONF_FILE_EX(obj_,memb_,key_,def_)\
      {\
+         .type = CONFTYPE_FILE,\
          .key = #key_,\
          .def = def_,\
          .off = offsetof(obj_,memb_),\

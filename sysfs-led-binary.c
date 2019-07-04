@@ -51,12 +51,16 @@ typedef struct
 {
     const char *brightness;
     const char *max_brightness;
+    const char *on_string;
+    const char *off_string;
 } led_paths_binary_t;
 
 typedef struct
 {
     sysfsval_t *cached_max_brightness;
     sysfsval_t *cached_brightness;
+    int         on_value;
+    int         off_value;
 } led_channel_binary_t;
 
 /* ------------------------------------------------------------------------- *
@@ -132,8 +136,7 @@ cleanup:
 static void
 led_channel_binary_set_value(led_channel_binary_t *self, int value)
 {
-    value = led_util_scale_value(value,
-                                 sysfsval_get(self->cached_max_brightness));
+    value = value ? self->on_value : self->off_value;
     sysfsval_set(self->cached_brightness, value);
 }
 
@@ -187,8 +190,12 @@ led_control_binary_static_probe(led_channel_binary_t *channel)
     bool ack = false;
 
     for( size_t i = 0; i < G_N_ELEMENTS(paths); ++i ) {
-        if( (ack = led_channel_binary_probe(channel+0, &paths[i][0])) )
-            break;
+        if( !(ack = led_channel_binary_probe(&channel[0], &paths[i][0])) )
+            continue;
+
+        channel[i].off_value = 0;
+        channel[i].on_value  = sysfsval_get(channel[0].cached_max_brightness);
+        break;
     }
 
     return ack;
@@ -201,6 +208,10 @@ led_control_binary_dynamic_probe(led_channel_binary_t *channel)
     {
         OBJCONF_FILE(led_paths_binary_t, brightness,     Brightness),
         OBJCONF_FILE(led_paths_binary_t, max_brightness, MaxBrightness),
+
+        OBJCONF_STRING(led_paths_binary_t, on_string,  OnValue,  0),
+        OBJCONF_STRING(led_paths_binary_t, off_string, OffValue, 0),
+
         OBJCONF_STOP
     };
 
@@ -223,6 +234,21 @@ led_control_binary_dynamic_probe(led_channel_binary_t *channel)
 
         if( !led_channel_binary_probe(channel+i, &paths[i]) )
             goto cleanup;
+
+        if( paths[i].off_string )
+            channel[i].off_value = strtol(paths[i].off_string, 0, 0);
+        else
+            channel[i].off_value = 0;
+
+        if( paths[i].on_string )
+            channel[i].on_value = strtol(paths[i].on_string, 0, 0);
+        else
+            channel[i].on_value = sysfsval_get(channel[i].cached_max_brightness);
+
+        mce_log(LL_DEBUG,"[%s] on_value=%d off_value=%d",
+                pfix[i],
+                channel[i].on_value,
+                channel[i].off_value);
     }
 
     ack = true;

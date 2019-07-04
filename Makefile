@@ -149,6 +149,7 @@ install:: hybris.so
 normalize::
 	normalize_whitespace -M Makefile
 	normalize_whitespace -a $(wildcard *.[ch] *.cc *.cpp)
+	normalize_whitespace -a $(wildcard inifiles/*.ini)
 
 # ----------------------------------------------------------------------------
 # AUTOMATIC HEADER DEPENDENCIES
