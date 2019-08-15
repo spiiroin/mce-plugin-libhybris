@@ -202,6 +202,7 @@ hybris_device_fb_init(void)
         mce_log(LL_WARN, "hwc api level 3+ - not supported");
       }
       else if( vers >= 0x0200 ) {
+#ifdef HWC_DEVICE_API_VERSION_1_4 // Need 1.4 constants for 2.0 support
         hwc2_device_t *hwcdev = (hwc2_device_t *)hybris_device_hwc_handle;
         if( hwcdev->getFunction ) {
           if( hwcdev->getFunction(hwcdev, HWC2_FUNCTION_SET_POWER_MODE) ) {
@@ -211,6 +212,9 @@ hybris_device_fb_init(void)
           }
         }
         mce_log(LL_WARN, "hwc api level 2.0 - setPowerMode() not available");
+#else
+        mce_log(LL_WARN, "hwc api level 2.0 - not supported");
+#endif
       }
       else if( vers >= 0x0104 ) {
 #ifdef HWC_DEVICE_API_VERSION_1_4
@@ -220,8 +224,10 @@ hybris_device_fb_init(void)
           ack = true;
           goto cleanup;
         }
-#endif
         mce_log(LL_WARN, "hwc api level 1.4 - setPowerMode() not available");
+#else
+        mce_log(LL_WARN, "hwc api level 1.4 - not supported");
+#endif
       }
       else if( vers >= 0x0100 ) {
 #ifdef HWC_DEVICE_API_VERSION_1_0
@@ -231,8 +237,10 @@ hybris_device_fb_init(void)
           ack = true;
           goto cleanup;
         }
-#endif
         mce_log(LL_WARN, "hwc api level 1.0 - blank() not available");
+#else
+        mce_log(LL_WARN, "hwc api level 1.0 - not supported");
+#endif
       }
       else {
         mce_log(LL_WARN, "hwc api level 0 - not supported");
@@ -312,8 +320,6 @@ hybris_device_fb_set_power(bool state)
   /* Try hwc methods */
   if( hybris_device_hwc_handle ) {
     int disp  = 0;
-    int mode  = state ? HWC_POWER_MODE_NORMAL : HWC_POWER_MODE_OFF;
-    int blank = state ? false : true;
 
     uint32_t vers = hybris_device_hwc_handle->version >> 16;
     mce_log(LL_DEBUG, "hwc_device version: %u.%u", (vers >> 8), (vers & 255));
@@ -322,22 +328,26 @@ hybris_device_fb_set_power(bool state)
       /* We do not know what API v3+ might be like -> NOP */
     }
     else if( vers >= 0x0200 ) {
+#ifdef HWC_DEVICE_API_VERSION_1_4 // Need 1.4 constants for 2.0 support
       hwc2_device_t *hwcdev = (hwc2_device_t *)hybris_device_hwc_handle;
       if( hwcdev->getFunction ) {
         hwc2_function_pointer_t a_function = hwcdev->getFunction(hwcdev, HWC2_FUNCTION_SET_POWER_MODE);
         HWC2_PFN_SET_POWER_MODE the_function = (HWC2_PFN_SET_POWER_MODE)(void *)a_function;
         if( the_function ) {
+          int mode  = state ? HWC_POWER_MODE_NORMAL : HWC_POWER_MODE_OFF;
           err = the_function(hwcdev, disp, mode);
           mce_log(err ? LL_WARN : LL_DEBUG,
                   "hw composer 2.0 setPowerMode(%d) -> err=%d",
                   mode, err);
         }
       }
+#endif
     }
     else if( vers >= 0x0104 ) {
 #ifdef HWC_DEVICE_API_VERSION_1_4
       hwc_composer_device_1_t *hwcdev = (hwc_composer_device_1_t *)hybris_device_hwc_handle;
       if( hwcdev->setPowerMode ) {
+        int mode  = state ? HWC_POWER_MODE_NORMAL : HWC_POWER_MODE_OFF;
         err = hwcdev->setPowerMode(hwcdev, disp, mode);
         mce_log(err ? LL_WARN : LL_DEBUG,
                 "hw composer 1.4 setPowerMode(%d) -> err=%d",
@@ -349,6 +359,7 @@ hybris_device_fb_set_power(bool state)
 #ifdef HWC_DEVICE_API_VERSION_1_0
       hwc_composer_device_1_t *hwcdev = (hwc_composer_device_1_t *)hybris_device_hwc_handle;
       if( hwcdev->blank ) {
+        int blank = state ? false : true;
         err = hwcdev->blank(hwcdev, disp, blank);
         mce_log(err ? LL_WARN : LL_DEBUG,
                 "hw composer 1.0 blank(%d) -> err=%d",
