@@ -32,7 +32,7 @@ make %{?_smp_mflags}
 
 %install
 rm -rf %{buildroot}
-make install DESTDIR=%{buildroot}
+make install DESTDIR=%{buildroot} _LIBDIR=%{_libdir}
 # rpm automajick needs +x bits on all elf files after install
 chmod 755 %{buildroot}%{_libdir}/mce/modules/hybris.so
 
