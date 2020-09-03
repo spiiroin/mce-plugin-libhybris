@@ -1,10 +1,12 @@
+# Option for building with hybris support
+%bcond_with hybris
+
 Name:       mce-plugin-libhybris
 Summary:    Libhybris plugin for Mode Control Entity
 Version:    1.14.4
 Release:    1
-Group:      System/System Control
 License:    LGPLv2
-URL:        https://github.com/nemomobile/mce-plugin-libhybris
+URL:        https://github.com/mer-hybris/mce-plugin-libhybris
 Source0:    %{name}-%{version}.tar.bz2
 
 Requires:         mce >= 1.12.10
@@ -15,9 +17,11 @@ Requires(preun):  systemd
 Requires(postun): systemd
 
 BuildRequires:  pkgconfig(glib-2.0) >= 2.18.0
+%if %{with hybris}
 BuildRequires:  pkgconfig(libhardware)
 BuildRequires:  pkgconfig(android-headers)
-BuildRequires:  systemd
+%endif
+BuildRequires:  pkgconfig(systemd)
 
 %description
 This package contains a mce plugin that allows mce to use Android
@@ -25,16 +29,13 @@ libhardware via libhybris to control for example display brightness
 and enable/disable input from proximity and light sensors.
 
 %prep
-%setup -q -n %{name}-%{version}
+%autosetup -n %{name}-%{version}
 
 %build
-make %{?_smp_mflags}
+%make_build %{?with_hybris:ENABLE_HYBRIS_SUPPORT=1}
 
 %install
-rm -rf %{buildroot}
 make install DESTDIR=%{buildroot} _LIBDIR=%{_libdir}
-# rpm automajick needs +x bits on all elf files after install
-chmod 755 %{buildroot}%{_libdir}/mce/modules/hybris.so
 
 %pre
 if [ "$1" = "2" ]; then
@@ -61,5 +62,4 @@ fi
 %files
 %defattr(-,root,root,-)
 %license COPYING
-# do not include the bogus +x bit for packaged DSOs
-%attr(644,-,-) %{_libdir}/mce/modules/hybris.so
+%{_libdir}/mce/modules/hybris.so
