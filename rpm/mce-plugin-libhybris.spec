@@ -3,7 +3,7 @@ Summary:    Libhybris plugin for Mode Control Entity
 Version:    1.14.2
 Release:    1
 Group:      System/System Control
-License:    LGPLv2.1
+License:    LGPLv2
 URL:        https://github.com/nemomobile/mce-plugin-libhybris
 Source0:    %{name}-%{version}.tar.bz2
 
@@ -60,6 +60,6 @@ fi
 
 %files
 %defattr(-,root,root,-)
-%doc COPYING
+%license COPYING
 # do not include the bogus +x bit for packaged DSOs
 %attr(644,-,-) %{_libdir}/mce/modules/hybris.so
