@@ -26,6 +26,7 @@
 
 #include "plugin-api.h"
 
+#include <android-config.h>
 #include <system/window.h>
 #include <hardware/lights.h>
 
