@@ -25,6 +25,7 @@
 #include "plugin-logging.h"
 #include "hybris-thread.h"
 
+#include <android-config.h>
 #include <hardware/sensors.h>
 
 #include <glib.h>
