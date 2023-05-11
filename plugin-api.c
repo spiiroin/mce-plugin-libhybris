@@ -116,6 +116,8 @@ void mce_hybris_als_set_hook              (mce_hybris_als_fn cb);
 
 void mce_hybris_quit                      (void);
 
+#ifdef ENABLE_HYBRIS_SUPPORT
+
 /* ========================================================================= *
  * FRAME_BUFFER_POWER_STATE
  * ========================================================================= */
@@ -218,6 +220,8 @@ mce_hybris_keypad_set_brightness(int level)
   return hybris_device_keypad_set_brightness(level);
 }
 
+#endif //ENABLE_HYBRIS_SUPPORT
+
 /* ========================================================================= *
  * INDICATOR_LED_PATTERN
  * ========================================================================= */
@@ -258,9 +262,15 @@ mce_hybris_indicator_init(void)
   if( sysfs_led_init() ) {
     mce_hybris_indicator_uses_sysfs = true;
   }
+#ifdef ENABLE_HYBRIS_SUPPORT
   else if( !hybris_device_indicator_init() ) {
     goto  cleanup;
   }
+#else
+  else {
+    goto cleanup;
+  }
+#endif
 
   ack = true;
 
@@ -280,10 +290,12 @@ mce_hybris_indicator_quit(void)
     /* Release sysfs controls */
     sysfs_led_quit();
   }
+#ifdef ENABLE_HYBRIS_SUPPORT
   else {
     /* Release libhybris controls */
     hybris_device_indicator_quit();
   }
+#endif
 }
 
 /** Set indicator led pattern via libhybris
@@ -329,9 +341,11 @@ mce_hybris_indicator_set_pattern(int r, int g, int b, int ms_on, int ms_off)
   if( mce_hybris_indicator_uses_sysfs ) {
     ack = sysfs_led_set_pattern(r, g, b, ms_on, ms_off);
   }
+#ifdef ENABLE_HYBRIS_SUPPORT
   else {
     ack = hybris_device_indicator_set_pattern(r, g, b, ms_on, ms_off);
   }
+#endif
 
   mce_log(LL_DEBUG, "pattern(%d,%d,%d,%d,%d) -> %s",
           r,g,b, ms_on, ms_off , ack ? "success" : "failure");
@@ -409,6 +423,7 @@ mce_hybris_indicator_set_brightness(int level)
   return true;
 }
 
+#ifdef ENABLE_HYBRIS_SUPPORT
 /* ========================================================================= *
  * PROXIMITY_SENSOR
  * ========================================================================= */
@@ -496,6 +511,7 @@ mce_hybris_als_set_hook(mce_hybris_als_fn cb)
 {
   hybris_device_als_set_hook(cb);
 }
+#endif //ENABLE_HYBRIS_SUPPORT
 
 /* ========================================================================= *
  * GENERIC
@@ -506,7 +522,9 @@ mce_hybris_als_set_hook(mce_hybris_als_fn cb)
 void
 mce_hybris_quit(void)
 {
+#ifdef ENABLE_HYBRIS_SUPPORT
   hybris_plugin_fb_unload();
   hybris_plugin_lights_unload();
   hybris_plugin_sensors_unload();
+#endif
 }
