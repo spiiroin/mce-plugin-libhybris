@@ -2,7 +2,8 @@
  *
  * mce-plugin-libhybris - Libhybris plugin for Mode Control Entity
  * <p>
- * Copyright (C) 2013-2017 Jolla Ltd.
+ * Copyright (c) 2013 - 2017 Jolla Ltd.
+ * Copyright (c) 2024 Jollyboys Ltd.
  * <p>
  * @author Simo Piiroinen <simo.piiroinen@jollamobile.com>
  *
@@ -32,6 +33,7 @@
 #include "sysfs-led-binary.h"
 #include "sysfs-led-redgreen.h"
 #include "sysfs-led-white.h"
+#include "sysfs-led-mind2-v1.h"
 
 #include "plugin-logging.h"
 #include "plugin-config.h"
@@ -300,6 +302,12 @@ led_control_probe(led_control_t *self)
     /* The binary backend needs just one directory
      * that has 'brightness' control file. */
     { "binary", led_control_binary_probe },
+
+    /* Arrangement of two rgb leds
+     *    with 0/1 red, green, blue color selection
+     *    and 0-N brightness control
+     * plus master power toggle governing both leds. */
+    { "mind2v1", led_control_mind2v1_probe },
   };
 
   bool   ack  = false;
