@@ -2,7 +2,8 @@
  *
  * mce-plugin-libhybris - Libhybris plugin for Mode Control Entity
  * <p>
- * Copyright (C) 2013-2017 Jolla Ltd.
+ * Copyright (c) 2013 - 2017 Jolla Ltd.
+ * Copyright (c) 2024 Jollyboys Ltd.
  * <p>
  * @author Simo Piiroinen <simo.piiroinen@jollamobile.com>
  *
@@ -41,6 +42,15 @@ typedef enum {
 
   /** Step function used for emulating blinking via sw breathing */
   LED_RAMP_HARD_STEP = 2,
+
+  /** Triangle waveform */
+  LED_RAMP_TRIANGLE = 3,
+
+  /** Sawtooth waveform */
+  LED_RAMP_SAWTOOTH = 4,
+
+  /** Sine waveform */
+  LED_RAMP_SINE = 5,
 } led_ramp_t;
 
 typedef struct led_control_t led_control_t;

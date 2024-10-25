@@ -128,8 +128,10 @@ static bool        sysfs_led_probe_files             (void);
 static void        sysfs_led_set_rgb_blink           (int on, int off);
 static void        sysfs_led_set_rgb_value           (int r, int g, int b);
 
-static void        sysfs_led_generate_ramp_half_sin  (int ms_on, int ms_off);
+static void        sysfs_led_generate_ramp_sine      (int ms_on, int ms_off, bool half);
 static void        sysfs_led_generate_ramp_hard_step (int ms_on, int ms_off);
+static void        sysfs_led_generate_ramp_triangle  (int ms_on, int ms_off);
+static void        sysfs_led_generate_ramp_sawtooth  (int ms_on, int ms_off);
 static void        sysfs_led_generate_ramp_dummy     (void);
 static void        sysfs_led_generate_ramp           (int ms_on, int ms_off);
 
@@ -535,7 +537,7 @@ sysfs_led_set_rgb_value(int r, int g, int b)
 /** Generate half sine intensity curve for use from breathing timer
  */
 static void
-sysfs_led_generate_ramp_half_sin(int ms_on, int ms_off)
+sysfs_led_generate_ramp_sine(int ms_on, int ms_off, bool half)
 {
   int t = ms_on + ms_off;
   int s = (t + SYSFS_LED_MAX_STEPS - 1) / SYSFS_LED_MAX_STEPS;
@@ -548,17 +550,31 @@ sysfs_led_generate_ramp_half_sin(int ms_on, int ms_off)
   int steps_on  = (n * ms_on + t / 2) / t;
   int steps_off = n - steps_on;
 
-  const float m_pi_2 = (float)M_PI_2;
-
+  /* Calculate a non-zero value for each step on the ramp.
+   */
   int k = 0;
 
-  for( int i = 0; i < steps_on; ++i ) {
-    float a = i * m_pi_2 / steps_on;
-    sysfs_led_breathe.value[k++] = (uint8_t)(sinf(a) * 255.0f);
+  if( half ) {
+    const float m_pi_2 = (float)M_PI_2;
+    for( int i = 0; i < steps_on; ++i ) {
+      float a = i * m_pi_2 / steps_on;
+      sysfs_led_breathe.value[k++] = (uint8_t)roundf(led_util_ftrans(sinf(a), 0, 1, 1, 255));
+    }
+    for( int i = 0; i < steps_off; ++i ) {
+      float a = m_pi_2 + i * m_pi_2 / steps_off;
+      sysfs_led_breathe.value[k++] = (uint8_t)roundf(led_util_ftrans(sinf(a), 0, 1, 1, 255));
+    }
   }
-  for( int i = 0; i < steps_off; ++i ) {
-    float a = m_pi_2 + i * m_pi_2 / steps_off;
-    sysfs_led_breathe.value[k++] = (uint8_t)(sinf(a) * 255.0f);
+  else {
+    const float m_pi = (float)M_PI;
+    for( int i = 0; i < steps_on; ++i ) {
+      float a = (1.5f * m_pi) + (i * m_pi / steps_on);
+      sysfs_led_breathe.value[k++] = (uint8_t)roundf(led_util_ftrans(sinf(a), -1, +1, 1, 255));
+    }
+    for( int i = 0; i < steps_off; ++i ) {
+      float a = (0.5f * m_pi) + (i * m_pi / steps_off);
+      sysfs_led_breathe.value[k++] = (uint8_t)roundf(led_util_ftrans(sinf(a), -1, +1, 1, 255));
+    }
   }
 
   sysfs_led_breathe.delay = s;
@@ -624,6 +640,62 @@ sysfs_led_generate_ramp_hard_step(int ms_on, int ms_off)
           sysfs_led_breathe.delay, steps_on, steps_off);
 }
 
+/** Generate triangle wave for use from breathing timer
+ */
+static void
+sysfs_led_generate_ramp_triangle(int ms_on, int ms_off)
+{
+  /* Round up to multiples of minimum step size */
+  int ms_step = SYSFS_LED_STEP_DELAY;
+
+  ms_on  = led_util_roundup(ms_on,  ms_step);
+  ms_off = led_util_roundup(ms_off, ms_step);
+
+  int ms_tot = ms_on + ms_off;
+
+  /* Calculate number of steps */
+  int steps_tot = (ms_tot + ms_step - 1) / ms_step;
+
+  if( steps_tot > SYSFS_LED_MAX_STEPS ) {
+    steps_tot = SYSFS_LED_MAX_STEPS;
+    ms_step   = (ms_tot + steps_tot - 1) / steps_tot;
+
+    if( ms_step < SYSFS_LED_STEP_DELAY )
+      ms_step = SYSFS_LED_STEP_DELAY;
+  }
+
+  /* Divide time between raising and lowering edges.
+   * Put rounding excess to raising edge to facilitate
+   * zero ms_off time used for sawtooth case.
+   */
+  int steps_off = (ms_off + ms_step - 1 ) / ms_step;
+  int steps_on  = steps_tot - steps_off;
+
+  /* Set a non-zero intensity value for each step on the ramp.
+   */
+  int i = 0;
+
+  for( ; i < steps_on; ++i )
+    sysfs_led_breathe.value[i] = led_util_trans(i, 0, steps_on, 1, 255);;
+
+  for( ; i < steps_tot; ++i )
+    sysfs_led_breathe.value[i] = led_util_trans(steps_tot - i, 0, steps_off, 1, 255);
+
+  sysfs_led_breathe.delay = ms_step;
+  sysfs_led_breathe.steps = steps_tot;
+
+  mce_log(LL_DEBUG, "delay=%d, steps_on=%d, steps_off=%d",
+          sysfs_led_breathe.delay, steps_on, steps_off);
+}
+
+/** Generate sawtooth wave for use from breathing timer
+ */
+static void
+sysfs_led_generate_ramp_sawtooth(int ms_on, int ms_off)
+{
+  sysfs_led_generate_ramp_triangle(ms_on + ms_off, 0);
+}
+
 /** Invalidate sw breathing intensity curve
  */
 static void
@@ -639,12 +711,24 @@ static void
 sysfs_led_generate_ramp(int ms_on, int ms_off)
 {
   switch( led_control_breath_type(&led_control) ) {
+  case LED_RAMP_SINE:
+    sysfs_led_generate_ramp_sine(ms_on, ms_off, false);
+    break;
+
+  case LED_RAMP_SAWTOOTH:
+    sysfs_led_generate_ramp_sawtooth(ms_on, ms_off);
+    break;
+
+  case LED_RAMP_TRIANGLE:
+    sysfs_led_generate_ramp_triangle(ms_on, ms_off);
+    break;
+
   case LED_RAMP_HARD_STEP:
     sysfs_led_generate_ramp_hard_step(ms_on, ms_off);
     break;
 
   case LED_RAMP_HALF_SINE:
-    sysfs_led_generate_ramp_half_sin(ms_on, ms_off);
+    sysfs_led_generate_ramp_sine(ms_on, ms_off, true);
     break;
 
   default:
