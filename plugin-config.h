@@ -2,7 +2,8 @@
  *
  * mce-plugin-libhybris - Libhybris plugin for Mode Control Entity
  * <p>
- * Copyright (C) 2017 Jolla Ltd.
+ * Copyright (c) 2017 Jolla Ltd.
+ * Copyright (c) 2024 Jollyboys Ltd.
  * <p>
  * @author Simo Piiroinen <simo.piiroinen@jollamobile.com>
  *
@@ -41,7 +42,10 @@
 #define MCE_CONF_LED_CONFIG_HYBRIS_BACKEND "BackEnd"
 
 /** Optional enable/disable sw breathing setting */
-#define MCE_CONF_LED_CONFIG_HYBRIS_BREATHING "QuirkBreathing"
+#define MCE_CONF_LED_CONFIG_HYBRIS_BREATHING_ENABLED "QuirkBreathing"
+
+/** Optional sw breathing type setting */
+#define MCE_CONF_LED_CONFIG_HYBRIS_BREATHING_TYPE   "QuirkBreathingType"
 
 gchar * plugin_config_get_string(const gchar *group, const gchar *key, const gchar *defaultval);
 

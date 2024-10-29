@@ -317,7 +317,7 @@ led_control_probe(led_control_t *self)
 
   for( size_t i = 0; i < G_N_ELEMENTS(lut); ++i )
   {
-    self->use_config = false;
+    led_control_close(self);
 
     if( name ) {
       if( strcmp(lut[i].name, name) ) {
@@ -337,7 +337,8 @@ led_control_probe(led_control_t *self)
       continue;
     }
 
-    self->can_breathe = QUIRK(QUIRK_BREATHING, self->can_breathe);
+    self->can_breathe = QUIRK(QUIRK_BREATHING_ENABLED, self->can_breathe);
+    self->breath_type = QUIRK(QUIRK_BREATHING_TYPE, self->breath_type);
 
     ack = true;
     break;
