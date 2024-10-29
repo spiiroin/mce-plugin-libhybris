@@ -2,7 +2,8 @@
  *
  * mce-plugin-libhybris - Libhybris plugin for Mode Control Entity
  * <p>
- * Copyright (C) 2017 Jolla Ltd.
+ * Copyright (c) 2017 Jolla Ltd.
+ * Copyright (c) 2024 Jollyboys Ltd.
  * <p>
  * @author Simo Piiroinen <simo.piiroinen@jollamobile.com>
  *
@@ -111,6 +112,16 @@ sysfsval_delete(sysfsval_t *self)
         sysfsval_dtor(self);
         free(self);
     }
+}
+
+/** De-initialize and release sysfsval_t object at given location
+ *
+ * @param pself pointer to sysfsval_t object pointer
+ */
+void
+sysfsval_delete_at(sysfsval_t **pself)
+{
+    sysfsval_delete(*pself), *pself = NULL;
 }
 
 /** Assign path to sysfsval_t object and open the file in read+write mode

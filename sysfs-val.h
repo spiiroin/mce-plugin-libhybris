@@ -2,7 +2,8 @@
  *
  * mce-plugin-libhybris - Libhybris plugin for Mode Control Entity
  * <p>
- * Copyright (C) 2017 Jolla Ltd.
+ * Copyright (c) 2017 Jolla Ltd.
+ * Copyright (c) 2024 Jollyboys Ltd.
  * <p>
  * @author Simo Piiroinen <simo.piiroinen@jollamobile.com>
  *
@@ -38,6 +39,7 @@ typedef struct sysfsval_t sysfsval_t;
 
 sysfsval_t        *sysfsval_create    (void);
 void               sysfsval_delete    (sysfsval_t *self);
+void               sysfsval_delete_at (sysfsval_t **pself);
 bool               sysfsval_open_rw   (sysfsval_t *self, const char *path);
 bool               sysfsval_open_ro   (sysfsval_t *self, const char *path);
 void               sysfsval_close     (sysfsval_t *self);

@@ -142,6 +142,7 @@ hybris_OBJS += sysfs-led-f5121.pic.o
 hybris_OBJS += sysfs-led-hammerhead.pic.o
 hybris_OBJS += sysfs-led-htcvision.pic.o
 hybris_OBJS += sysfs-led-main.pic.o
+hybris_OBJS += sysfs-led-mind2-v1.pic.o
 hybris_OBJS += sysfs-led-redgreen.pic.o
 hybris_OBJS += sysfs-led-util.pic.o
 hybris_OBJS += sysfs-led-vanilla.pic.o
