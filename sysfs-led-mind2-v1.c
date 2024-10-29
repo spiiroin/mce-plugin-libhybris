@@ -325,9 +325,8 @@ led_control_mind2v1_probe(led_control_t *self)
     self->value  = led_control_mind2v1_value_cb;
     self->close  = led_control_mind2v1_close_cb;
 
-    // XXX: Disable breathing for now
-    self->can_breathe = false;
-    self->breath_type = LED_RAMP_DISABLED;
+    self->can_breathe = true;
+    self->breath_type = LED_RAMP_SINE;
 
     if( self->use_config )
         res = led_control_mind2v1_dynamic_probe(&state);
