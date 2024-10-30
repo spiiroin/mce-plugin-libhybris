@@ -241,7 +241,8 @@ leds_state_mind2v1_update_power(leds_state_mind2v1_t *self)
         if( (power = led_state_mind2v1_is_active(&self->led[idx])) )
             break;
 
-    sysfsval_set(self->cached_power, power);
+    if( power )
+        sysfsval_set(self->cached_power, true);
 }
 
 static void
