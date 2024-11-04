@@ -46,28 +46,9 @@ enum {
     MIND2V1_LED_COUNT
 };
 
-/* Cap brightness to [0, 15] range */
-#define MIND2V1_MIN_BRIGHTNESS  0
-#define MIND2V1_MAX_BRIGHTNESS 15
-
-/* ========================================================================= *
- * Utility
- * ========================================================================= */
-
-static inline int imax(int a, int b)
-{
-    return (a > b) ? a : b;
-}
-
-static inline int imax3(int a, int b, int c)
-{
-    return imax(imax(a, b), c);
-}
-
-static inline int icap(int v, int l, int h)
-{
-    return v < l ? l : v < h ? v : h;
-};
+/* Brightness range to be used in "led on" situations */
+#define MIND2V1_MIN_BRIGHTNESS  1
+#define MIND2V1_MAX_BRIGHTNESS 63
 
 /* ========================================================================= *
  * Types
@@ -177,7 +158,13 @@ led_state_mind2v1_set_value(led_state_mind2v1_t *self, int r, int g, int b)
     sysfsval_set(self->cached_green, (g > 0) ? 1 : 0);
     sysfsval_set(self->cached_blue,  (b > 0) ? 1 : 0);
 
-    int v = icap(imax3(r, g, b), MIND2V1_MIN_BRIGHTNESS, MIND2V1_MAX_BRIGHTNESS);
+    int v = led_util_max3(r, g, b);
+
+    if( v <= 0 )
+        v = 0;
+    else
+        v = led_util_trans(v, 1, 255, MIND2V1_MIN_BRIGHTNESS, MIND2V1_MAX_BRIGHTNESS);
+
     sysfsval_set(self->cached_brightness, v);
 }
 
@@ -254,7 +241,8 @@ leds_state_mind2v1_update_power(leds_state_mind2v1_t *self)
         if( (power = led_state_mind2v1_is_active(&self->led[idx])) )
             break;
 
-    sysfsval_set(self->cached_power, power);
+    if( power )
+        sysfsval_set(self->cached_power, true);
 }
 
 static void
@@ -338,9 +326,8 @@ led_control_mind2v1_probe(led_control_t *self)
     self->value  = led_control_mind2v1_value_cb;
     self->close  = led_control_mind2v1_close_cb;
 
-    // XXX: Disable breathing for now
-    self->can_breathe = false;
-    self->breath_type = LED_RAMP_DISABLED;
+    self->can_breathe = true;
+    self->breath_type = LED_RAMP_SINE;
 
     if( self->use_config )
         res = led_control_mind2v1_dynamic_probe(&state);

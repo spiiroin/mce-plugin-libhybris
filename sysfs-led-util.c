@@ -2,7 +2,8 @@
  *
  * mce-plugin-libhybris - Libhybris plugin for Mode Control Entity
  * <p>
- * Copyright (C) 2013-2017 Jolla Ltd.
+ * Copyright (c) 2013 - 2017 Jolla Ltd.
+ * Copyright (c) 2024 Jollyboys Ltd.
  * <p>
  * @author Simo Piiroinen <simo.piiroinen@jollamobile.com>
  *
@@ -107,13 +108,16 @@ led_util_open_file(int *fd_ptr, const char *path)
 }
 
 /** Scale value from 0...255 to 0...max range
+ *
+ * Note: zero / nonzero nature of input is preserved in output
  */
 int
 led_util_scale_value(int in, int max)
 {
-  int out = (in * max + 128) / 255;
-
-  return (out < 0) ? 0 : (out < max) ? out : max;
+  int out = 0;
+  if( in > 0 )
+    out = led_util_trans(in, 1, 255, 1, max);
+  return out;
 }
 
 /** Calculate the greatest common divisor of two integer numbers

@@ -2,7 +2,8 @@
  *
  * mce-plugin-libhybris - Libhybris plugin for Mode Control Entity
  * <p>
- * Copyright (C) 2017 Jolla Ltd.
+ * Copyright (c) 2017 Jolla Ltd.
+ * Copyright (c) 2024 Jollyboys Ltd.
  * <p>
  * @author Simo Piiroinen <simo.piiroinen@jollamobile.com>
  *
@@ -37,7 +38,10 @@ typedef enum
     QUIRK_INVALID = -1,
 
     /** Override sw breathing desicion made by led backend */
-    QUIRK_BREATHING,
+    QUIRK_BREATHING_ENABLED,
+
+    /** Override breathing type desicion made by led backend */
+    QUIRK_BREATHING_TYPE,
 
     /** Number of quirks */
     QUIRK_COUNT
