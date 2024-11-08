@@ -138,7 +138,7 @@ static void        sysfs_led_generate_ramp           (int ms_on, int ms_off);
 static gboolean    sysfs_led_static_cb               (gpointer aptr);
 static gboolean    sysfs_led_step_cb                 (gpointer aptr);
 static gboolean    sysfs_led_stop_cb                 (gpointer aptr);
-static void        sysfs_led_start                   (const led_state_t *next);
+static void        sysfs_led_start                   (void);
 
 static void        sysfs_led_wait_kernel             (void);
 
@@ -474,6 +474,15 @@ static led_state_t sysfs_led_curr =
   .r       = -1,
   .g       = -1,
   .b       = -1,
+};
+
+/** Target RGB led state; initialize to off */
+static led_state_t sysfs_led_next =
+{
+  /* color is "black" i.e. led is off */
+  .r       = 0,
+  .g       = 0,
+  .b       = 0,
 
   /* not blinking or breathing */
   .on      = 0,
@@ -568,11 +577,11 @@ sysfs_led_generate_ramp_sine(int ms_on, int ms_off, bool half)
   else {
     const float m_pi = (float)M_PI;
     for( int i = 0; i < steps_on; ++i ) {
-      float a = (1.5f * m_pi) + (i * m_pi / steps_on);
+      float a = (0.5f * m_pi) + (i * m_pi / steps_on);
       sysfs_led_breathe.value[k++] = (uint8_t)roundf(led_util_ftrans(sinf(a), -1, +1, 1, 255));
     }
     for( int i = 0; i < steps_off; ++i ) {
-      float a = (0.5f * m_pi) + (i * m_pi / steps_off);
+      float a = (1.5f * m_pi) + (i * m_pi / steps_off);
       sysfs_led_breathe.value[k++] = (uint8_t)roundf(led_util_ftrans(sinf(a), -1, +1, 1, 255));
     }
   }
@@ -867,16 +876,17 @@ cleanup:
   return FALSE;
 }
 
-/** Start static/blinking/breathing led
- */
-static void
-sysfs_led_start(const led_state_t *next)
+static guint sysfs_led_start_id = 0;
+
+static gboolean sysfs_led_start_cb(gpointer aptr)
 {
-  led_state_t work = *next;
+  (void)aptr;
 
-  led_state_sanitize(&work);
+  sysfs_led_start_id = 0;
 
-  if( led_state_is_equal(&sysfs_led_curr, &work) ) {
+  led_state_sanitize(&sysfs_led_next);
+
+  if( led_state_is_equal(&sysfs_led_curr, &sysfs_led_next) ) {
     goto cleanup;
   }
 
@@ -886,13 +896,13 @@ sysfs_led_start(const led_state_t *next)
   bool restart = true;
 
   led_style_t old_style = led_state_get_style(&sysfs_led_curr);
-  led_style_t new_style = led_state_get_style(&work);
+  led_style_t new_style = led_state_get_style(&sysfs_led_next);
 
   /* Exception: When we are already breathing and continue to
    * breathe, the blinking is not in use and the breathing timer
    * is keeping the updates far enough from each other */
   if( old_style == STYLE_BREATH && new_style == STYLE_BREATH &&
-      led_state_has_equal_timing(&sysfs_led_curr, &work) ) {
+      led_state_has_equal_timing(&sysfs_led_curr, &sysfs_led_next) ) {
     restart = false;
   }
 
@@ -900,12 +910,12 @@ sysfs_led_start(const led_state_t *next)
    * adjust the breathing amplitude without affecting the phase.
    * Otherwise assume that the pattern has been changed and the
    * breathing step counter needs to be reset. */
-  sysfs_led_curr.level = work.level;
-  if( !led_state_is_equal(&sysfs_led_curr, &work) ) {
+  sysfs_led_curr.level = sysfs_led_next.level;
+  if( !led_state_is_equal(&sysfs_led_curr, &sysfs_led_next) ) {
     sysfs_led_breathe.step = 0;
   }
 
-  sysfs_led_curr = work;
+  sysfs_led_curr = sysfs_led_next;
 
   if( restart ) {
     // stop existing breathing timer
@@ -916,7 +926,7 @@ sysfs_led_start(const led_state_t *next)
     // re-evaluate breathing constants
     sysfs_led_breathe.delay = 0;
     if( new_style == STYLE_BREATH ) {
-      sysfs_led_generate_ramp(work.on, work.off);
+      sysfs_led_generate_ramp(sysfs_led_next.on, sysfs_led_next.off);
     }
 
     if( old_style == STYLE_BLINK || new_style == STYLE_BLINK )
@@ -931,8 +941,17 @@ sysfs_led_start(const led_state_t *next)
   }
 
 cleanup:
+  return G_SOURCE_REMOVE;
+}
 
-  return;
+/** Start static/blinking/breathing led
+ */
+static void
+sysfs_led_start(void)
+{
+  if( !sysfs_led_start_id ) {
+    sysfs_led_start_id = g_idle_add(sysfs_led_start_cb, NULL);
+  }
 }
 
 /** Nanosleep helper
@@ -954,11 +973,7 @@ sysfs_led_init(void)
   }
 
   /* adjust current state to: color=black */
-  led_state_t req = sysfs_led_curr;
-  req.r = 0;
-  req.g = 0;
-  req.b = 0;
-  sysfs_led_start(&req);
+  sysfs_led_start();
 
   ack = true;
 
@@ -971,6 +986,9 @@ void
 sysfs_led_quit(void)
 {
   // cancel timers
+  if( sysfs_led_start_id ) {
+    g_source_remove(sysfs_led_start_id), sysfs_led_start_id = 0;
+  }
   if( sysfs_led_step_id ) {
     g_source_remove(sysfs_led_step_id), sysfs_led_step_id = 0;
   }
@@ -996,13 +1014,12 @@ sysfs_led_set_pattern(int r, int g, int b,
                       int ms_on, int ms_off)
 {
   /* adjust current state to: color & timing as requested */
-  led_state_t req = sysfs_led_curr;
-  req.r   = r;
-  req.g   = g;
-  req.b   = b;
-  req.on  = ms_on;
-  req.off = ms_off;
-  sysfs_led_start(&req);
+  sysfs_led_next.r   = r;
+  sysfs_led_next.g   = g;
+  sysfs_led_next.b   = b;
+  sysfs_led_next.on  = ms_on;
+  sysfs_led_next.off = ms_off;
+  sysfs_led_start();
 
   return true;
 }
@@ -1018,9 +1035,8 @@ sysfs_led_set_breathing(bool enable)
 {
   if( sysfs_led_can_breathe() ) {
     /* adjust current state to: breathing as requested */
-    led_state_t work = sysfs_led_curr;
-    work.breathe = enable;
-    sysfs_led_start(&work);
+    sysfs_led_next.breathe = enable;
+    sysfs_led_start();
   }
 }
 
@@ -1028,7 +1044,6 @@ void
 sysfs_led_set_brightness(int level)
 {
   /* adjust current state to: brightness as requested */
-  led_state_t work = sysfs_led_curr;
-  work.level = level;
-  sysfs_led_start(&work);
+  sysfs_led_next.level = level;
+  sysfs_led_start();
 }
