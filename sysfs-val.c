@@ -42,6 +42,7 @@ struct sysfsval_t
     char *sv_path;
     int   sv_file;
     int   sv_curr;
+    int   sv_mode;
 };
 
 /* ========================================================================= *
@@ -77,6 +78,7 @@ sysfsval_ctor(sysfsval_t *self)
     self->sv_path = 0;
     self->sv_file = -1;
     self->sv_curr = -1;
+    self->sv_mode = O_RDONLY;
 }
 
 /** Release all dynamically allocated resources used by sysfsval_t object
@@ -171,6 +173,8 @@ sysfsval_open_ex(sysfsval_t *self, const char *path, mode_t mode)
 
     mce_log(LOG_DEBUG, "%s: opened", sysfsval_path(self));
 
+    self->sv_mode = mode;
+
     /* Note: Current value is not fetched by default */
 
     ack = true;
@@ -189,6 +193,8 @@ EXIT:
 void
 sysfsval_close(sysfsval_t *self)
 {
+    self->sv_mode = O_RDONLY;
+
     if( self->sv_file != -1 ) {
         mce_log(LOG_DEBUG, "%s: closed", sysfsval_path(self));
         close(self->sv_file), self->sv_file = -1;
@@ -240,6 +246,9 @@ sysfsval_set(sysfsval_t *self, int value)
     self->sv_curr = value;
 
     if( prev == self->sv_curr )
+        goto EXIT;
+
+    if( self->sv_mode == O_RDONLY )
         goto EXIT;
 
     /* If file is closed: assume it was optional and do not
