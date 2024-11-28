@@ -53,6 +53,7 @@ typedef struct
     const char *max_brightness;
     const char *brightness;
     const char *blink;
+    const char *max_brightness_override;
 } led_paths_f5121_t;
 
 typedef struct
@@ -130,13 +131,21 @@ led_channel_f5121_probe(led_channel_f5121_t *self,
     if( !sysfsval_open_ro(self->cached_max_brightness, path->max_brightness) )
         goto cleanup;
 
-    /* The 'max_brightness' seems to be dynamic. Make an attempt
-     * to set it to an artificially high value and assume that kernel
-     * side will cap the value to the true maximum... */
-#if 0 // TODO: make a QUIRK out of this
-    sysfsval_set(self->cached_max_brightness, 255);
-#endif
-    sysfsval_refresh(self->cached_max_brightness);
+    /* If MaxBrightnessOverride has been configured, it will be used
+     * instead of content of max_brightness file.
+     */
+
+    int max_brightness_override = 0;
+    if( path->max_brightness_override )
+        max_brightness_override = strtol(path->max_brightness_override, NULL, 0);
+
+    if( max_brightness_override > 0 )
+        sysfsval_set(self->cached_max_brightness, max_brightness_override);
+    else
+        sysfsval_refresh(self->cached_max_brightness);
+
+    mce_log(LOG_DEBUG, "%s: effective = %d", path->max_brightness,
+            sysfsval_get(self->cached_max_brightness));
 
     if( sysfsval_get(self->cached_max_brightness) <= 0 )
         goto cleanup;
@@ -259,16 +268,19 @@ led_control_f5121_static_probe(led_channel_f5121_t *channel)
                 .max_brightness = "/sys/class/leds/led:rgb_red/max_brightness",
                 .brightness     = "/sys/class/leds/led:rgb_red/brightness",
                 .blink          = "/sys/class/leds/led:rgb_red/blink",
+                .max_brightness_override = "255",
             },
             {
                 .max_brightness = "/sys/class/leds/led:rgb_green/max_brightness",
                 .brightness     = "/sys/class/leds/led:rgb_green/brightness",
                 .blink          = "/sys/class/leds/led:rgb_green/blink",
+                .max_brightness_override = "255",
             },
             {
                 .max_brightness = "/sys/class/leds/led:rgb_blue/max_brightness",
                 .brightness     = "/sys/class/leds/led:rgb_blue/brightness",
                 .blink          = "/sys/class/leds/led:rgb_blue/blink",
+                .max_brightness_override = "255",
             },
         },
         {
@@ -313,6 +325,9 @@ led_control_f5121_dynamic_probe(led_channel_f5121_t *channel)
     OBJCONF_FILE(led_paths_f5121_t, brightness,      Brightness),
     OBJCONF_FILE(led_paths_f5121_t, max_brightness,  MaxBrightness),
     OBJCONF_FILE(led_paths_f5121_t, blink,           Blink),
+
+    OBJCONF_STRING(led_paths_f5121_t, max_brightness_override, MaxBrightnessOverride, NULL),
+
     OBJCONF_STOP
   };
 
