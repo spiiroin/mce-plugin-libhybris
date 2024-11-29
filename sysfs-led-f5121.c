@@ -128,7 +128,7 @@ led_channel_f5121_probe(led_channel_f5121_t *self,
     if( !sysfsval_open_rw(self->cached_blink, path->blink) )
         goto cleanup;
 
-    if( !sysfsval_open_ro(self->cached_max_brightness, path->max_brightness) )
+    if( !sysfsval_open_rw(self->cached_max_brightness, path->max_brightness) )
         goto cleanup;
 
     /* If MaxBrightnessOverride has been configured, it will be used
@@ -138,11 +138,10 @@ led_channel_f5121_probe(led_channel_f5121_t *self,
     int max_brightness_override = 0;
     if( path->max_brightness_override )
         max_brightness_override = strtol(path->max_brightness_override, NULL, 0);
-
     if( max_brightness_override > 0 )
         sysfsval_set(self->cached_max_brightness, max_brightness_override);
-    else
-        sysfsval_refresh(self->cached_max_brightness);
+
+    sysfsval_refresh(self->cached_max_brightness);
 
     mce_log(LOG_DEBUG, "%s: effective = %d", path->max_brightness,
             sysfsval_get(self->cached_max_brightness));
